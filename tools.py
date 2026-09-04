@@ -24,12 +24,10 @@ def web_search(query: str) -> str:
     """
 
     try:
-
         response = tavily_client.search(
             query=query,
             max_results=5
         )
-
         results = response.get("results", [])
 
         if not results:
@@ -68,18 +66,15 @@ def web_scrape(url: str) -> str:
 
         if response.status_code != 200:
             return f"Failed to retrieve the page. Status code: {response.status_code}"
-
+        
         soup = BeautifulSoup(response.content, "html.parser")
-
+        
         # Extract text from the page
         text_content = soup.get_text(separator="\n", strip=True)[:3000]  # Limit to first 30,000 characters
-
         return text_content
 
     except Exception as e:
-
         return f"An error occurred while scraping the web page: {e}"
-
 
 print(
     web_search.invoke(
