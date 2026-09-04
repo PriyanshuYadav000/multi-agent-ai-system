@@ -1,111 +1,83 @@
-from langchain_openai import ChatOpenAI
 from langchain.agents import create_agent
+from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_core.output_parsers import StructuredOutputParser
+from langchain_core.output_parsers import StrOutputParser
 
-from tools import web_scrape,web_search
+from tools import web_search, scrape_url
+from dotenv import load_dotenv
 
-from rich import print
+load_dotenv()
 
-llm = ChatOpenAI(
-    model_name="gpt-4o",
-    temperature=0,
-    max_tokens=2000,
+
+from langchain_groq import ChatGroq
+
+llm = ChatGroq(
+    model="openai/gpt-oss-20b",
+    temperature=0
 )
 
-#first agent 
-def build_agent():
+
+#1st agent 
+def build_search_agent():
     return create_agent(
-        model=llm,
-        tools=[web_search]
+        model = llm,
+        tools= [web_search]
     )
 
-#2nd agent
+#2nd agent 
+
 def build_reader_agent():
     return create_agent(
-        model=llm,
-        tools=[web_scrape]
+        model = llm,
+        tools = [scrape_url]
     )
 
-#lets create chains 
-#writer chain
 
-from langchain_core.prompts import ChatPromptTemplate
-
+#writer chain 
 
 writer_prompt = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        "You are a helpful assistant that can search the web for information and provide summaries."
-    ),
-    (
-        "human",
-        """
-Write a detailed summary on the topic below.
+    ("system", "You are an expert research writer. Write clear, structured and insightful reports."),
+    ("human", """Write a detailed research report on the topic below.
 
-Topic:
-{topic}
+Topic: {topic}
 
 Research Gathered:
 {research}
 
 Structure the report as:
-
 - Introduction
-- Key Findings(minimum 3 well-explained points)
+- Key Findings (minimum 3 well-explained points)
 - Conclusion
 - Sources (list all URLs found in the research)
 
-Be detailed, factual, and professional in your writing.
-Use the research provided to support your summary.
-If no research is provided, indicate that no information was found on the topic.
-"""
-    ),
+Be detailed, factual and professional."""),
 ])
 
-writer_chain = writer_prompt | llm | StructuredOutputParser()
+writer_chain = writer_prompt | llm | StrOutputParser()
 
-#critic chain
+#critic_chain 
 
 critic_prompt = ChatPromptTemplate.from_messages([
-    (
-        "system",
-        "You are an expert research critic. Evaluate the report for accuracy, "
-        "relevance, completeness, clarity, and writing quality."
-    ),
-    (
-        "human",
-        """ Review the Research Report below and evalute it strictly.
-Topic:
-{topic}
-
-Research:
-{research}
+     ("system", "You are a sharp and constructive research critic. Be honest and specific."),
+    ("human", """Review the research report below and evaluate it strictly.
 
 Report:
 {report}
 
-Provide:
+Respond in this exact format:
 
 Score: X/10
 
 Strengths:
-- 
+- ...
+- ...
 
-Areas for Improvement:
-- 
+Areas to Improve:
+- ...
+- ...
 
-Factual Accuracy:
-- 
-
-Missing Information:
-- 
-
-Overall Feedback:
-- 
-"""
-    ),
+One line verdict:
+..."""),
 ])
 
-critic_chain = critic_prompt | llm | StructuredOutputParser()
-
+critic_chain = critic_prompt | llm | StrOutputParser()
