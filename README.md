@@ -38,7 +38,6 @@ The project also includes a futuristic **Streamlit frontend** that visualizes th
 ---
 
 # 🧠 Architecture
-
 The system follows a sequential multi-agent architecture.
 
 ```mermaid
