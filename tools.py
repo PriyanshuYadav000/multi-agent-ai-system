@@ -1,15 +1,10 @@
 from langchain.tools import tool
-
 import requests  # for web scraping
 from bs4 import BeautifulSoup  # for web scraping
 from tavily import TavilyClient  # for Tavily API
-
 import os  # for environment variables
-
 from dotenv import load_dotenv  # for loading environment variables
-
 from rich import print
-
 
 load_dotenv()
 
