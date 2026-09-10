@@ -1,15 +1,15 @@
-import json
 import os
-import re
-
 import streamlit as st
-import streamlit.components.v1 as components
 
 from groq import Groq
 from streamlit_mic_recorder import mic_recorder
 
 from pipeline import run_research_pipeline
 
+
+# ============================================================
+# PAGE CONFIG
+# ============================================================
 
 st.set_page_config(
     page_title="Multi-Agent AI Research System",
@@ -19,19 +19,46 @@ st.set_page_config(
 )
 
 
-try:
-    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-except Exception:
-    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# ============================================================
+# SECRET MANAGEMENT
+# ============================================================
+
+def get_secret(name: str):
+    """
+    Read from Streamlit secrets first.
+    Fall back to environment variables.
+    """
+    try:
+        value = st.secrets.get(name)
+
+        if value:
+            return value
+
+    except Exception:
+        pass
+
+    return os.getenv(name)
+
+
+GROQ_API_KEY = get_secret("GROQ_API_KEY")
 
 
 if not GROQ_API_KEY:
-    st.error("GROQ_API_KEY is not configured.")
+    st.error(
+        "GROQ_API_KEY is not configured."
+    )
     st.stop()
 
 
-if "query" not in st.session_state:
-    st.session_state.query = ""
+# ============================================================
+# SESSION STATE
+# ============================================================
+
+if "query_input" not in st.session_state:
+    st.session_state.query_input = ""
+
+if "voice_query" not in st.session_state:
+    st.session_state.voice_query = ""
 
 if "result" not in st.session_state:
     st.session_state.result = None
@@ -39,1079 +66,88 @@ if "result" not in st.session_state:
 if "pipeline_running" not in st.session_state:
     st.session_state.pipeline_running = False
 
+if "selected_language" not in st.session_state:
+    st.session_state.selected_language = "English"
 
-def md(html_string: str) -> None:
-    flattened = "\n".join(
-        line.strip()
-        for line in html_string.strip("\n").split("\n")
+
+# ============================================================
+# PAGE TITLE
+# ============================================================
+
+st.write("")
+
+st.caption(
+    "● AUTONOMOUS MULTI-AGENT RESEARCH"
+)
+
+st.title(
+    "Multi-Agent AI Research System"
+)
+
+st.write(
+    "Search the live web, read real sources, "
+    "generate structured research, evaluate the result, "
+    "and interact with the AI using English or Hindi voice."
+)
+
+
+# ============================================================
+# RESEARCH CONSOLE
+# ============================================================
+
+with st.container(border=True):
+
+    header_col, meta_col = st.columns(
+        [4, 1]
     )
 
-    st.markdown(
-        flattened,
-        unsafe_allow_html=True,
-    )
+    with header_col:
 
-
-def transcribe_audio(
-    audio_bytes: bytes,
-    language: str,
-) -> str:
-
-    client = Groq(
-        api_key=GROQ_API_KEY
-    )
-
-    language_code = (
-        "hi"
-        if language == "Hindi"
-        else "en"
-    )
-
-    transcription = client.audio.transcriptions.create(
-        file=(
-            "recording.webm",
-            audio_bytes,
-        ),
-        model="whisper-large-v3-turbo",
-        language=language_code,
-        response_format="json",
-        temperature=0,
-    )
-
-    return transcription.text.strip()
-
-
-def speech_button(
-    text: str,
-    language: str,
-    key: str,
-) -> None:
-
-    clean_text = re.sub(
-        r"https?://\S+",
-        "",
-        text,
-    )
-
-    clean_text = re.sub(
-        r"\[([^\]]+)\]\([^)]+\)",
-        r"\1",
-        clean_text,
-    )
-
-    clean_text = re.sub(
-        r"[#*_`]",
-        "",
-        clean_text,
-    )
-
-    clean_text = clean_text[:3500]
-
-    speech_language = (
-        "hi-IN"
-        if language == "Hindi"
-        else "en-US"
-    )
-
-    encoded_text = json.dumps(
-        clean_text
-    )
-
-    button_id = f"speech_{key}"
-
-    components.html(
-        f"""
-        <div style="width:100%;">
-            <button
-                id="{button_id}"
-                style="
-                    width:100%;
-                    padding:12px;
-                    border-radius:12px;
-                    border:1px solid rgba(99,246,255,0.35);
-                    background:
-                        linear-gradient(
-                            90deg,
-                            rgba(99,246,255,0.12),
-                            rgba(124,92,237,0.12)
-                        );
-                    color:#efffff;
-                    font-weight:800;
-                    cursor:pointer;
-                    font-size:14px;
-                    transition:all 0.2s ease;
-                "
-            >
-                🔊 SPEAK RESPONSE
-            </button>
-        </div>
-
-        <script>
-            const button =
-                document.getElementById("{button_id}");
-
-            let speaking = false;
-
-            button.addEventListener(
-                "click",
-                function() {{
-
-                    if (!window.speechSynthesis) {{
-                        return;
-                    }}
-
-                    if (speaking) {{
-
-                        window.speechSynthesis.cancel();
-
-                        speaking = false;
-
-                        button.innerHTML =
-                            "🔊 SPEAK RESPONSE";
-
-                        return;
-                    }}
-
-                    window.speechSynthesis.cancel();
-
-                    const utterance =
-                        new SpeechSynthesisUtterance(
-                            {encoded_text}
-                        );
-
-                    utterance.lang =
-                        "{speech_language}";
-
-                    utterance.rate = 0.95;
-                    utterance.pitch = 1.0;
-
-                    utterance.onstart =
-                        function() {{
-
-                            speaking = true;
-
-                            button.innerHTML =
-                                "⏹️ STOP SPEAKING";
-                        }};
-
-                    utterance.onend =
-                        function() {{
-
-                            speaking = false;
-
-                            button.innerHTML =
-                                "🔊 SPEAK RESPONSE";
-                        }};
-
-                    utterance.onerror =
-                        function() {{
-
-                            speaking = false;
-
-                            button.innerHTML =
-                                "🔊 SPEAK RESPONSE";
-                        }};
-
-                    window.speechSynthesis.speak(
-                        utterance
-                    );
-                }}
-            );
-        </script>
-        """,
-        height=58,
-    )
-
-
-PHASES = [
-    (
-        "search",
-        "🔎",
-        "SEARCH AGENT",
-        "WEB DISCOVERY",
-    ),
-    (
-        "reader",
-        "📖",
-        "READER AGENT",
-        "SOURCE EXTRACTION",
-    ),
-    (
-        "writer",
-        "✍️",
-        "WRITER CHAIN",
-        "REPORT GENERATION",
-    ),
-    (
-        "critic",
-        "🧠",
-        "CRITIC CHAIN",
-        "QUALITY EVALUATION",
-    ),
-]
-
-
-def render_pipeline(
-    placeholder,
-    active_stage=None,
-    completed=None,
-):
-
-    completed = completed or set()
-
-    cards = []
-
-    for key, icon, name, subtitle in PHASES:
-
-        if key in completed:
-            css_class = "complete"
-            status = "COMPLETE"
-
-        elif key == active_stage:
-            css_class = "active"
-            status = "RUNNING"
-
-        else:
-            css_class = "waiting"
-            status = "WAITING"
-
-        cards.append(
-            f"""
-            <div class="phase-card {css_class}">
-
-                <div class="phase-top">
-
-                    <span class="phase-icon">
-                        {icon}
-                    </span>
-
-                    <span class="phase-number">
-                        {key.upper()}
-                    </span>
-
-                </div>
-
-                <div class="phase-name">
-                    {name}
-                </div>
-
-                <div class="phase-subtitle">
-                    {subtitle}
-                </div>
-
-                <div class="phase-status">
-                    <span class="phase-dot"></span>
-                    {status}
-                </div>
-
-            </div>
-            """
+        st.subheader(
+            "🔎 Research Intelligence Console"
         )
 
-    html = f"""
-    <style>
+    with meta_col:
 
-        .phase-grid {{
-            display:grid;
-            grid-template-columns:repeat(4,1fr);
-            gap:14px;
-            width:100%;
-            margin-top:1.4rem;
-            margin-bottom:1.8rem;
-        }}
+        st.caption(
+            "MULTI_AGENT_PIPELINE :: READY"
+        )
 
-        .phase-card {{
-            min-height:175px;
-            padding:1.25rem;
-            border-radius:20px;
-
-            background:
-                linear-gradient(
-                    145deg,
-                    rgba(255,255,255,0.045),
-                    rgba(255,255,255,0.012)
-                );
-
-            border:
-                1px solid
-                rgba(255,255,255,0.08);
-
-            transition:
-                all 0.3s ease;
-
-            position:relative;
-            overflow:hidden;
-        }}
-
-        .phase-card.waiting {{
-            opacity:0.45;
-        }}
-
-        .phase-card.active {{
-            opacity:1;
-
-            border-color:
-                rgba(99,246,255,0.7);
-
-            box-shadow:
-                0 0 45px
-                rgba(99,246,255,0.14);
-
-            transform:
-                translateY(-5px);
-        }}
-
-        .phase-card.active::after {{
-            content:"";
-
-            position:absolute;
-            inset:0;
-
-            border-radius:20px;
-
-            box-shadow:
-                inset 0 0 35px
-                rgba(99,246,255,0.08);
-
-            animation:
-                phasePulse 1.5s
-                ease-in-out infinite;
-
-            pointer-events:none;
-        }}
-
-        .phase-card.complete {{
-            opacity:0.95;
-
-            border-color:
-                rgba(0,255,170,0.45);
-
-            box-shadow:
-                0 0 24px
-                rgba(0,255,170,0.07);
-        }}
-
-        @keyframes phasePulse {{
-
-            0%,
-            100% {{
-                opacity:0.35;
-            }}
-
-            50% {{
-                opacity:1;
-            }}
-        }}
-
-        .phase-top {{
-            display:flex;
-            justify-content:space-between;
-            align-items:center;
-        }}
-
-        .phase-icon {{
-            font-size:2rem;
-        }}
-
-        .phase-number {{
-            color:#46566b;
-            font-family:monospace;
-            font-size:0.58rem;
-        }}
-
-        .phase-name {{
-            margin-top:0.65rem;
-            color:#f3f7fb;
-            font-size:0.94rem;
-            font-weight:800;
-        }}
-
-        .phase-subtitle {{
-            margin-top:0.3rem;
-            color:#68778c;
-            font-family:monospace;
-            font-size:0.6rem;
-            letter-spacing:0.7px;
-        }}
-
-        .phase-status {{
-            display:inline-flex;
-            align-items:center;
-            gap:6px;
-
-            margin-top:0.9rem;
-            padding:0.3rem 0.6rem;
-
-            border-radius:999px;
-
-            border:
-                1px solid
-                rgba(99,246,255,0.13);
-
-            background:
-                rgba(99,246,255,0.04);
-
-            color:#63f6ff;
-
-            font-family:monospace;
-            font-size:0.57rem;
-        }}
-
-        .phase-card.complete .phase-status {{
-            color:#6dffcb;
-
-            border-color:
-                rgba(0,255,170,0.2);
-        }}
-
-        .phase-dot {{
-            width:5px;
-            height:5px;
-            border-radius:50%;
-
-            background:#63f6ff;
-
-            box-shadow:
-                0 0 9px #63f6ff;
-        }}
-
-        .phase-card.complete .phase-dot {{
-            background:#00ffaa;
-
-            box-shadow:
-                0 0 9px #00ffaa;
-        }}
-
-        @media(max-width:900px) {{
-
-            .phase-grid {{
-                grid-template-columns:
-                    repeat(2,1fr);
-            }}
-        }}
-
-        @media(max-width:600px) {{
-
-            .phase-grid {{
-                grid-template-columns:1fr;
-            }}
-        }}
-
-    </style>
-
-    <div class="phase-grid">
-        {"".join(cards)}
-    </div>
-    """
-
-    placeholder.empty()
-
-    components.html(
-        html,
-        height=225,
-        scrolling=False,
+    st.caption(
+        "ENTER YOUR RESEARCH QUERY"
     )
 
 
-def make_progress_callback(
-    placeholder,
-):
+# ============================================================
+# VOICE QUERY HANDOFF
+# ============================================================
 
-    completed = set()
+if st.session_state.voice_query:
 
-    def callback(stage, status):
+    st.session_state.query_input = (
+        st.session_state.voice_query
+    )
 
-        stage = str(
-            stage
-        ).lower().strip()
+    st.session_state.voice_query = ""
 
-        status = str(
-            status
-        ).lower().strip()
 
-        stage_map = {
-            "search": "search",
-            "search_agent": "search",
-
-            "reader": "reader",
-            "reader_agent": "reader",
-
-            "writer": "writer",
-            "writer_chain": "writer",
-
-            "critic": "critic",
-            "critic_chain": "critic",
-        }
-
-        stage = stage_map.get(
-            stage,
-            stage,
-        )
-
-        if status in {
-            "complete",
-            "completed",
-            "done",
-            "finished",
-        }:
-
-            completed.add(
-                stage
-            )
-
-            next_stage = None
-
-            for (
-                phase_key,
-                _,
-                _,
-                _,
-            ) in PHASES:
-
-                if phase_key not in completed:
-
-                    next_stage = phase_key
-                    break
-
-            render_pipeline(
-                placeholder,
-                next_stage,
-                completed,
-            )
-
-        elif status in {
-            "running",
-            "start",
-            "started",
-            "in_progress",
-        }:
-
-            render_pipeline(
-                placeholder,
-                stage,
-                completed,
-            )
-
-    return callback
-
-
-md(
-    """
-    <style>
-
-    * {
-        box-sizing:border-box;
-    }
-
-    .stApp {
-
-        min-height:100vh;
-
-        background:
-            radial-gradient(
-                circle at 10% 10%,
-                rgba(0,234,255,0.13),
-                transparent 28%
-            ),
-
-            radial-gradient(
-                circle at 90% 15%,
-                rgba(124,58,237,0.14),
-                transparent 30%
-            ),
-
-            linear-gradient(
-                180deg,
-                #02050a 0%,
-                #050811 50%,
-                #03060c 100%
-            );
-
-        color:#f5f7fb;
-    }
-
-    .stApp::before {
-
-        content:"";
-
-        position:fixed;
-
-        inset:0;
-
-        background-image:
-
-            linear-gradient(
-                rgba(90,240,255,0.025) 1px,
-                transparent 1px
-            ),
-
-            linear-gradient(
-                90deg,
-                rgba(90,240,255,0.025) 1px,
-                transparent 1px
-            );
-
-        background-size:46px 46px;
-
-        pointer-events:none;
-
-        z-index:0;
-    }
-
-    header {
-        visibility:hidden;
-    }
-
-    footer {
-        visibility:hidden;
-    }
-
-    #MainMenu {
-        visibility:hidden;
-    }
-
-    .block-container {
-
-        max-width:1380px;
-
-        padding-top:1rem;
-
-        padding-bottom:4rem;
-
-        position:relative;
-
-        z-index:3;
-    }
-
-    .hero {
-
-        text-align:center;
-
-        padding:
-            2.5rem
-            1rem
-            2rem;
-    }
-
-    .hero-badge {
-
-        display:inline-flex;
-
-        padding:
-            0.5rem
-            1rem;
-
-        border-radius:999px;
-
-        border:
-            1px solid
-            rgba(99,246,255,0.25);
-
-        background:
-            rgba(99,246,255,0.05);
-
-        color:#63f6ff;
-
-        font-family:monospace;
-
-        font-size:0.7rem;
-
-        letter-spacing:1.5px;
-    }
-
-    .hero-title {
-
-        margin-top:1rem;
-
-        font-size:
-            clamp(
-                2.5rem,
-                6vw,
-                5rem
-            );
-
-        font-weight:800;
-
-        line-height:1;
-
-        letter-spacing:-2px;
-
-        background:
-            linear-gradient(
-                105deg,
-                #fff,
-                #63f6ff,
-                #a78bfa,
-                #fff
-            );
-
-        -webkit-background-clip:text;
-
-        -webkit-text-fill-color:transparent;
-    }
-
-    .hero-subtitle {
-
-        max-width:820px;
-
-        margin:
-            1.2rem
-            auto
-            0;
-
-        color:#909cad;
-
-        line-height:1.8;
-    }
-
-    .command-panel {
-
-        padding:1.6rem;
-
-        border-radius:24px;
-
-        background:
-            linear-gradient(
-                145deg,
-                rgba(10,17,30,0.92),
-                rgba(4,9,17,0.82)
-            );
-
-        border:
-            1px solid
-            rgba(99,246,255,0.16);
-
-        box-shadow:
-            0 30px 80px
-            rgba(0,0,0,0.35);
-    }
-
-    .command-header {
-
-        display:flex;
-
-        justify-content:
-            space-between;
-
-        align-items:center;
-
-        margin-bottom:1.3rem;
-    }
-
-    .command-title {
-
-        color:#eafcff;
-
-        font-size:1.05rem;
-
-        font-weight:800;
-    }
-
-    .command-meta {
-
-        color:#63f6ff;
-
-        font-family:monospace;
-
-        font-size:0.62rem;
-    }
-
-    .query-title {
-
-        color:#63f6ff;
-
-        font-family:monospace;
-
-        font-size:0.72rem;
-
-        letter-spacing:1.7px;
-
-        margin-bottom:0.6rem;
-    }
-
-    .stTextInput > div > div > input {
-
-        min-height:62px;
-
-        background:#080e17 !important;
-
-        color:#ffffff !important;
-
-        border:
-            1px solid
-            rgba(99,246,255,0.32)
-            !important;
-
-        border-radius:15px !important;
-
-        font-size:1.03rem !important;
-
-        padding:
-            0.8rem
-            1.1rem !important;
-    }
-
-    .stTextInput > div > div > input:focus {
-
-        border-color:
-            rgba(99,246,255,0.8)
-            !important;
-
-        box-shadow:
-            0 0 30px
-            rgba(99,246,255,0.1)
-            !important;
-    }
-
-    div[data-baseweb="select"] > div {
-
-        background:#080e17 !important;
-
-        border:
-            1px solid
-            rgba(255,255,255,0.12)
-            !important;
-
-        border-radius:13px !important;
-    }
-
-    .stButton > button {
-
-        width:100%;
-
-        min-height:58px;
-
-        border-radius:14px;
-
-        border:
-            1px solid
-            rgba(99,246,255,0.4);
-
-        background:
-            linear-gradient(
-                90deg,
-                rgba(99,246,255,0.14),
-                rgba(124,92,237,0.14)
-            );
-
-        color:#efffff;
-
-        font-weight:800;
-
-        transition:
-            0.25s ease;
-    }
-
-    .stButton > button:hover {
-
-        transform:
-            translateY(-2px);
-
-        border-color:
-            rgba(99,246,255,0.82);
-
-        box-shadow:
-            0 0 35px
-            rgba(99,246,255,0.12);
-    }
-
-    .voice-panel {
-
-        margin-top:1rem;
-
-        padding:1rem;
-
-        border-radius:16px;
-
-        background:
-            rgba(99,246,255,0.025);
-
-        border:
-            1px dashed
-            rgba(99,246,255,0.22);
-
-        text-align:center;
-
-        color:#93a0b3;
-
-        font-size:0.78rem;
-    }
-
-    .output-wrapper {
-
-        margin-top:1rem;
-
-        padding:1.8rem;
-
-        border-radius:22px;
-
-        background:
-            rgba(7,12,21,0.78);
-
-        border:
-            1px solid
-            rgba(255,255,255,0.07);
-    }
-
-    .status-pill {
-
-        display:inline-flex;
-
-        padding:
-            0.35rem
-            0.75rem;
-
-        border-radius:999px;
-
-        color:#63f6ff;
-
-        background:
-            rgba(99,246,255,0.05);
-
-        border:
-            1px solid
-            rgba(99,246,255,0.15);
-
-        font-family:monospace;
-
-        font-size:0.62rem;
-
-        letter-spacing:1px;
-
-        margin-bottom:1rem;
-    }
-
-    [data-testid="stStatus"] {
-
-        border-radius:18px;
-
-        background:
-            rgba(7,12,21,0.84);
-
-        border:
-            1px solid
-            rgba(99,246,255,0.12);
-    }
-
-    .stTabs [data-baseweb="tab-list"] {
-
-        gap:4px;
-
-        padding:4px;
-
-        background:
-            rgba(4,8,15,0.76);
-
-        border-radius:16px;
-    }
-
-    .stTabs [data-baseweb="tab"] {
-
-        border-radius:10px;
-
-        color:#78869a;
-
-        font-size:0.8rem;
-    }
-
-    .stTabs [aria-selected="true"] {
-
-        color:#63f6ff;
-
-        background:
-            rgba(99,246,255,0.08);
-    }
-
-    [data-testid="stToggle"] {
-
-        margin-top:0.5rem;
-    }
-
-    [data-testid="stToggle"] label {
-
-        color:#dcecff !important;
-
-        font-weight:700 !important;
-    }
-
-    @media(max-width:900px) {
-
-        .command-header {
-
-            flex-direction:
-                column;
-
-            align-items:
-                flex-start;
-
-            gap:7px;
-        }
-    }
-
-    </style>
-    """
-)
-
-
-md(
-    """
-    <div class="hero">
-
-        <div class="hero-badge">
-            ● AUTONOMOUS MULTI-AGENT RESEARCH
-        </div>
-
-        <div class="hero-title">
-            Multi-Agent AI Research System
-        </div>
-
-        <div class="hero-subtitle">
-            Search the live web, read real sources,
-            generate structured research, evaluate the result,
-            and interact with the AI using English or Hindi voice.
-        </div>
-
-    </div>
-    """
-)
-
-
-md(
-    """
-    <div class="command-panel">
-
-        <div class="command-header">
-
-            <div class="command-title">
-                🔎 Research Intelligence Console
-            </div>
-
-            <div class="command-meta">
-                MULTI_AGENT_PIPELINE :: READY
-            </div>
-
-        </div>
-
-        <div class="query-title">
-            ENTER YOUR RESEARCH QUERY
-        </div>
-
-    </div>
-    """
-)
-
+# ============================================================
+# QUERY INPUT
+# ============================================================
 
 topic = st.text_input(
     "Research query",
-    value=st.session_state.query,
     placeholder=(
         "Ask anything... "
         "e.g. Latest AI developments in 2026"
     ),
-    label_visibility="collapsed",
-    key="query",
+    key="query_input",
 )
 
+
+# ============================================================
+# LANGUAGE + START
+# ============================================================
 
 language_col, button_col = st.columns(
     [1, 1]
@@ -1126,8 +162,14 @@ with language_col:
             "English",
             "Hindi",
         ],
-        index=0,
+        index=(
+            1
+            if st.session_state.selected_language == "Hindi"
+            else 0
+        ),
     )
+
+    st.session_state.selected_language = language
 
 
 with button_col:
@@ -1135,26 +177,24 @@ with button_col:
     run_button = st.button(
         "🚀 START RESEARCH",
         type="primary",
+        use_container_width=True,
         disabled=st.session_state.pipeline_running,
     )
 
 
-speak_enabled = st.toggle(
-    "🔊 Speak Response",
-    value=False,
-    key="speak_response_toggle",
+# ============================================================
+# VOICE INFORMATION
+# ============================================================
+
+st.info(
+    "🎙️ Speak your question → AI converts your speech "
+    "into text → review the text → start research."
 )
 
 
-md(
-    """
-    <div class="voice-panel">
-        🎙️ Speak your question → AI transcribes it →
-        Research / Weather → response in your selected language.
-    </div>
-    """
-)
-
+# ============================================================
+# MICROPHONE
+# ============================================================
 
 audio = mic_recorder(
     start_prompt="🎙️ START SPEAKING",
@@ -1166,39 +206,303 @@ audio = mic_recorder(
 )
 
 
+# ============================================================
+# SPEECH → TEXT
+# ============================================================
+
 if audio:
 
     try:
 
         with st.spinner(
-            "Transcribing your voice..."
+            "Converting speech to text..."
         ):
 
-            transcript = transcribe_audio(
-                audio["bytes"],
-                language,
+            client = Groq(
+                api_key=GROQ_API_KEY
             )
+
+            language_code = (
+                "hi"
+                if language == "Hindi"
+                else "en"
+            )
+
+            transcription = (
+                client
+                .audio
+                .transcriptions
+                .create(
+                    file=(
+                        "recording.webm",
+                        audio["bytes"],
+                    ),
+                    model="whisper-large-v3-turbo",
+                    language=language_code,
+                    response_format="json",
+                    temperature=0,
+                )
+            )
+
+            transcript = getattr(
+                transcription,
+                "text",
+                "",
+            ).strip()
 
         if transcript:
 
-            st.session_state.query = transcript
+            st.session_state.voice_query = (
+                transcript
+            )
 
             st.success(
-                f"Voice query: {transcript}"
+                f"Transcribed text: {transcript}"
             )
 
             st.rerun()
 
+        else:
+
+            st.warning(
+                "No speech was detected."
+            )
+
     except Exception as exc:
 
         st.error(
-            f"Voice transcription failed: {exc}"
+            f"Speech-to-text failed: {exc}"
         )
 
 
+# ============================================================
+# PIPELINE DEFINITIONS
+# ============================================================
+
+RESEARCH_PHASES = [
+    (
+        "search",
+        "🔎",
+        "SEARCH AGENT",
+        "WEB DISCOVERY",
+    ),
+    (
+        "reader",
+        "📖",
+        "READER",
+        "SOURCE EXTRACTION",
+    ),
+    (
+        "writer",
+        "✍️",
+        "WRITER",
+        "REPORT GENERATION",
+    ),
+    (
+        "critic",
+        "🧠",
+        "CRITIC",
+        "QUALITY EVALUATION",
+    ),
+]
+
+
+WEATHER_PHASE = [
+    (
+        "weather",
+        "🌤️",
+        "WEATHER",
+        "LIVE WEATHER",
+    )
+]
+
+
+# ============================================================
+# PIPELINE RENDERER
+# ============================================================
+
+def render_pipeline(
+    placeholder,
+    active_stage=None,
+    completed=None,
+    weather_mode=False,
+):
+    """
+    Render pipeline using native Streamlit components only.
+    """
+
+    completed = completed or set()
+
+    phases = (
+        WEATHER_PHASE
+        if weather_mode
+        else RESEARCH_PHASES
+    )
+
+    with placeholder.container():
+
+        st.subheader(
+            "⚡ Pipeline Execution"
+        )
+
+        columns = st.columns(
+            len(phases)
+        )
+
+        for index, phase in enumerate(
+            phases
+        ):
+
+            key, icon, name, subtitle = (
+                phase
+            )
+
+            with columns[index]:
+
+                with st.container(
+                    border=True
+                ):
+
+                    st.markdown(
+                        f"### {icon} {name}"
+                    )
+
+                    st.caption(
+                        subtitle
+                    )
+
+                    if key in completed:
+
+                        st.success(
+                            "✅ COMPLETE"
+                        )
+
+                    elif key == active_stage:
+
+                        st.info(
+                            "🔄 RUNNING"
+                        )
+
+                    else:
+
+                        st.caption(
+                            "⏳ WAITING"
+                        )
+
+
+# ============================================================
+# PIPELINE PROGRESS CALLBACK
+# ============================================================
+
+def make_progress_callback(
+    placeholder,
+    weather_mode=False,
+):
+
+    completed = set()
+
+    ordered_phases = (
+        ["weather"]
+        if weather_mode
+        else [
+            "search",
+            "reader",
+            "writer",
+            "critic",
+        ]
+    )
+
+    stage_map = {
+        "search": "search",
+        "search_agent": "search",
+
+        "reader": "reader",
+        "reader_agent": "reader",
+
+        "writer": "writer",
+        "writer_chain": "writer",
+
+        "critic": "critic",
+        "critic_chain": "critic",
+
+        "weather": "weather",
+    }
+
+    def callback(
+        stage,
+        status,
+    ):
+
+        stage = str(
+            stage
+        ).lower().strip()
+
+        status = str(
+            status
+        ).lower().strip()
+
+        stage = stage_map.get(
+            stage,
+            stage,
+        )
+
+        if stage not in ordered_phases:
+            return
+
+        if status in {
+            "complete",
+            "completed",
+            "done",
+            "finished",
+        }:
+
+            completed.add(
+                stage
+            )
+
+            next_stage = None
+
+            for phase in ordered_phases:
+
+                if phase not in completed:
+
+                    next_stage = phase
+
+                    break
+
+            render_pipeline(
+                placeholder=placeholder,
+                active_stage=next_stage,
+                completed=completed,
+                weather_mode=weather_mode,
+            )
+
+        elif status in {
+            "running",
+            "start",
+            "started",
+            "in_progress",
+        }:
+
+            render_pipeline(
+                placeholder=placeholder,
+                active_stage=stage,
+                completed=completed,
+                weather_mode=weather_mode,
+            )
+
+    return callback
+
+
+# ============================================================
+# RUN PIPELINE
+# ============================================================
+
 if run_button:
 
-    if not topic.strip():
+    query_text = topic.strip()
+
+    if not query_text:
 
         st.warning(
             "Please enter a query or use the microphone."
@@ -1208,10 +512,60 @@ if run_button:
 
     st.session_state.pipeline_running = True
 
+    # --------------------------------------------------------
+    # Weather detection for UI
+    # --------------------------------------------------------
+
+    weather_words = [
+        "weather",
+        "temperature",
+        "forecast",
+        "climate",
+        "humidity",
+        "rain",
+        "raining",
+        "snow",
+        "snowing",
+        "wind",
+        "storm",
+        "thunderstorm",
+        "hot",
+        "cold",
+        "heat",
+        "sunny",
+        "cloudy",
+        "monsoon",
+        "बारिश",
+        "मौसम",
+        "तापमान",
+        "ठंड",
+        "गर्मी",
+        "आंधी",
+        "तूफान",
+    ]
+
+    query_lower = query_text.lower()
+
+    weather_mode_ui = any(
+        word in query_lower
+        for word in weather_words
+    )
+
+    # --------------------------------------------------------
+    # ONE pipeline placeholder
+    # --------------------------------------------------------
+
     progress_placeholder = st.empty()
 
     render_pipeline(
-        progress_placeholder
+        progress_placeholder,
+        active_stage=(
+            "weather"
+            if weather_mode_ui
+            else "search"
+        ),
+        completed=set(),
+        weather_mode=weather_mode_ui,
     )
 
     try:
@@ -1221,35 +575,52 @@ if run_button:
             expanded=True,
         ) as status:
 
-            callback = make_progress_callback(
-                progress_placeholder
+            status.write(
+                "Initializing pipeline..."
             )
 
-            status.write(
-                "Initializing AI agents..."
+            callback = make_progress_callback(
+                progress_placeholder,
+                weather_mode=weather_mode_ui,
             )
 
             result = run_research_pipeline(
-                topic=topic.strip(),
+                topic=query_text,
                 language=language,
                 progress_callback=callback,
             )
 
-            for (
-                phase_key,
-                _,
-                _,
-                _,
-            ) in PHASES:
+            actual_mode = result.get(
+                "mode",
+                "research",
+            )
 
-                callback(
-                    phase_key,
-                    "complete",
+            # ------------------------------------------------
+            # Final pipeline state
+            # ------------------------------------------------
+
+            if actual_mode == "weather":
+
+                render_pipeline(
+                    progress_placeholder,
+                    active_stage=None,
+                    completed={"weather"},
+                    weather_mode=True,
                 )
 
-            status.write(
-                "AI response generated."
-            )
+            else:
+
+                render_pipeline(
+                    progress_placeholder,
+                    active_stage=None,
+                    completed={
+                        "search",
+                        "reader",
+                        "writer",
+                        "critic",
+                    },
+                    weather_mode=False,
+                )
 
             status.update(
                 label="✅ Processing complete",
@@ -1265,146 +636,221 @@ if run_button:
             f"Pipeline failed: {exc}"
         )
 
+        with st.expander(
+            "🔧 Technical error details"
+        ):
+
+            st.exception(exc)
+
     finally:
 
         st.session_state.pipeline_running = False
 
+
+# ============================================================
+# RESULTS
+# ============================================================
 
 result = st.session_state.result
 
 
 if result:
 
-    st.markdown("---")
+    st.divider()
 
-    if result.get("mode") == "weather":
+    mode = result.get(
+        "mode",
+        "research",
+    )
 
-        md(
-            """
-            <div class="output-wrapper">
+    # ========================================================
+    # WEATHER
+    # ========================================================
 
-                <div class="status-pill">
-                    ● LIVE WEATHER
-                </div>
-            """
-        )
+    if mode == "weather":
 
-        st.markdown(
-            "## 🌤️ Current Weather"
-        )
+        with st.container(
+            border=True
+        ):
 
-        st.markdown(
-            result["weather"]
-        )
-
-        if speak_enabled:
-
-            speech_button(
-                result["weather"],
-                result["language"],
-                "weather_speech",
+            st.subheader(
+                "🌤️ Live Weather"
             )
 
-        md(
-            """
-            </div>
-            """
-        )
+            weather_text = str(
+                result.get(
+                    "weather",
+                    result.get(
+                        "report",
+                        "",
+                    ),
+                )
+            ).strip()
+
+            if weather_text:
+
+                st.markdown(
+                    weather_text
+                )
+
+            else:
+
+                st.warning(
+                    "No weather result was returned."
+                )
+
+    # ========================================================
+    # RESEARCH
+    # ========================================================
 
     else:
 
-        md(
-            """
-            <div class="output-wrapper">
+        with st.container(
+            border=True
+        ):
 
-                <div class="status-pill">
-                    ● GENERATED RESEARCH
-                </div>
-            """
-        )
-
-        tabs = st.tabs(
-            [
-                "📄 Research Report",
-                "🧠 Critique",
-                "🔎 Search Results",
-                "📖 Scraped Sources",
-            ]
-        )
-
-        with tabs[0]:
-
-            st.markdown(
-                result["report"]
+            st.subheader(
+                "📄 Generated Research"
             )
 
-            if speak_enabled:
-
-                speech_button(
-                    result["report"],
-                    result["language"],
-                    "report_speech",
-                )
-
-        with tabs[1]:
-
-            st.markdown(
-                result["feedback"]
+            tabs = st.tabs(
+                [
+                    "📄 Research Report",
+                    "🧠 Critique",
+                    "🔎 Search Results",
+                    "📖 Scraped Sources",
+                ]
             )
 
-            if speak_enabled:
+            # ------------------------------------------------
+            # REPORT
+            # ------------------------------------------------
 
-                speech_button(
-                    result["feedback"],
-                    result["language"],
-                    "critique_speech",
-                )
+            with tabs[0]:
 
-        with tabs[2]:
+                report = str(
+                    result.get(
+                        "report",
+                        "",
+                    )
+                ).strip()
 
-            st.markdown(
-                result["search_results"]
-            )
+                if report:
 
-        with tabs[3]:
+                    st.markdown(
+                        report
+                    )
 
-            st.markdown(
-                result["scraped_content"]
-            )
+                else:
 
-        md(
-            """
-            </div>
-            """
-        )
+                    st.warning(
+                        "No research report was returned."
+                    )
+
+            # ------------------------------------------------
+            # CRITIQUE
+            # ------------------------------------------------
+
+            with tabs[1]:
+
+                feedback = str(
+                    result.get(
+                        "feedback",
+                        "",
+                    )
+                ).strip()
+
+                if feedback:
+
+                    st.markdown(
+                        feedback
+                    )
+
+                else:
+
+                    st.warning(
+                        "No critique was returned."
+                    )
+
+            # ------------------------------------------------
+            # SEARCH RESULTS
+            # ------------------------------------------------
+
+            with tabs[2]:
+
+                search_results = str(
+                    result.get(
+                        "search_results",
+                        "",
+                    )
+                ).strip()
+
+                if search_results:
+
+                    st.text_area(
+                        "Search results",
+                        value=search_results,
+                        height=450,
+                        label_visibility="collapsed",
+                    )
+
+                else:
+
+                    st.info(
+                        "No search results were returned."
+                    )
+
+            # ------------------------------------------------
+            # SCRAPED SOURCES
+            # ------------------------------------------------
+
+            with tabs[3]:
+
+                scraped_content = str(
+                    result.get(
+                        "scraped_content",
+                        "",
+                    )
+                ).strip()
+
+                if scraped_content:
+
+                    st.subheader(
+                        "Source Content"
+                    )
+
+                    st.text_area(
+                        "Scraped source",
+                        value=scraped_content,
+                        height=600,
+                        label_visibility="collapsed",
+                    )
+
+                else:
+
+                    st.info(
+                        "No scraped source content was returned."
+                    )
 
 
-md(
-    """
-    <div style="
-        text-align:center;
-        margin-top:4rem;
-        padding:2rem;
-        color:#526074;
-        font-family:monospace;
-        font-size:0.68rem;
-        line-height:1.9;
-    ">
+# ============================================================
+# FOOTER
+# ============================================================
 
-        MULTI-AGENT AI RESEARCH SYSTEM
+st.divider()
 
-        <br>
+st.caption(
+    "MULTI-AGENT AI RESEARCH SYSTEM"
+)
 
-        SEARCH → READ → WRITE → CRITIQUE
+st.caption(
+    "SEARCH → READ → WRITE → CRITIQUE"
+)
 
-        <br>
+st.caption(
+    "LangChain · Groq · Tavily · BeautifulSoup · Streamlit"
+)
 
-        LangChain · Groq · Tavily · BeautifulSoup · Streamlit
-
-        <br>
-
-        🌐 ENGLISH · 🇮🇳 HINDI · 🎙️ VOICE · 🌤️ LIVE WEATHER
-
-    </div>
-    """
+st.caption(
+    "🌐 ENGLISH · 🇮🇳 HINDI · 🎙️ VOICE · 🌤️ LIVE WEATHER"
 )
