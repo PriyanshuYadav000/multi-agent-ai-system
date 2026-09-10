@@ -14,10 +14,13 @@ from tools import (
 
 load_dotenv()
 
-GROQ_API_KEY = st.secrets.get(
-    "GROQ_API_KEY",
-    os.getenv("GROQ_API_KEY")
-)
+try:
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+except Exception:
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+if not GROQ_API_KEY:
+    raise RuntimeError("GROQ_API_KEY is not configured.")
 
 llm = ChatGroq(
     model="openai/gpt-oss-20b",
@@ -44,11 +47,10 @@ def build_weather_agent():
         tools=[live_weather],
     )
 
-writer_prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """You are an expert research writer.
+writer_prompt = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        """You are an expert research writer.
 
 Create factual, structured and professional research reports.
 
@@ -62,10 +64,10 @@ in their original form when appropriate.
 
 Never invent facts or sources.
 Use only the supplied research."""
-        ),
-        (
-            "human",
-            """Create a research report.
+    ),
+    (
+        "human",
+        """Create a research report.
 
 Topic:
 {topic}
@@ -91,17 +93,15 @@ Provide at least 3 well-explained findings.
 List the source URLs found in the research.
 
 Write the complete report in the selected language."""
-        ),
-    ]
-)
+    ),
+])
 
 writer_chain = writer_prompt | llm | StrOutputParser()
 
-critic_prompt = ChatPromptTemplate.from_messages(
-    [
-        (
-            "system",
-            """You are a strict and constructive research quality evaluator.
+critic_prompt = ChatPromptTemplate.from_messages([
+    (
+        "system",
+        """You are a strict and constructive research quality evaluator.
 
 Evaluate:
 - factual quality
@@ -112,10 +112,10 @@ Evaluate:
 - unsupported claims
 
 Write the evaluation in the selected language."""
-        ),
-        (
-            "human",
-            """Review this research report.
+    ),
+    (
+        "human",
+        """Review this research report.
 
 Selected Language:
 {language}
@@ -137,8 +137,7 @@ Areas to Improve:
 
 One line verdict:
 ..."""
-        ),
-    ]
-)
+    ),
+])
 
 critic_chain = critic_prompt | llm | StrOutputParser()
