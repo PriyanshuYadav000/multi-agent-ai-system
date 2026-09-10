@@ -1,5 +1,6 @@
+import os
+import streamlit as st
 from dotenv import load_dotenv
-
 from langchain.agents import create_agent
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
@@ -13,10 +14,16 @@ from tools import (
 
 load_dotenv()
 
+GROQ_API_KEY = st.secrets.get(
+    "GROQ_API_KEY",
+    os.getenv("GROQ_API_KEY")
+)
+
 llm = ChatGroq(
     model="openai/gpt-oss-20b",
     temperature=0,
     max_tokens=1000,
+    api_key=GROQ_API_KEY,
 )
 
 def build_search_agent():
