@@ -11,102 +11,54 @@ from tools import (
     live_weather,
 )
 
-
 load_dotenv()
-
-
-# ============================================================
-# LLM
-# ============================================================
 
 llm = ChatGroq(
     model="openai/gpt-oss-20b",
     temperature=0,
+    max_tokens=1000,
 )
 
-
-# ============================================================
-# SEARCH AGENT
-# ============================================================
-
 def build_search_agent():
-
     return create_agent(
         model=llm,
         tools=[web_search],
     )
 
-
-# ============================================================
-# READER AGENT
-# ============================================================
-
 def build_reader_agent():
-
     return create_agent(
         model=llm,
         tools=[scrape_url],
     )
 
-
-# ============================================================
-# WEATHER AGENT
-# ============================================================
-
 def build_weather_agent():
-
     return create_agent(
         model=llm,
         tools=[live_weather],
     )
 
-
-# ============================================================
-# WRITER CHAIN
-# ============================================================
-
 writer_prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            """
-You are an expert research writer.
+            """You are an expert research writer.
 
-Create factual, structured and professional
-research reports.
+Create factual, structured and professional research reports.
 
-LANGUAGE RULE:
+The selected language is either English or Hindi.
 
-The selected language will be either:
+Write the complete report in the selected language.
+Do not unnecessarily mix languages.
 
-English
-or
-Hindi
-
-If the selected language is English:
-write the complete report in English.
-
-If the selected language is Hindi:
-write the complete report in natural Hindi.
-
-Do not unnecessarily mix Hindi and English.
-
-Keep:
-- proper nouns
-- URLs
-- company names
-- technical names
-
+Keep proper nouns, URLs, company names and technical names
 in their original form when appropriate.
 
 Never invent facts or sources.
-Use only the supplied research.
-""",
+Use only the supplied research."""
         ),
         (
             "human",
-            """
-Create a detailed research report.
+            """Create a research report.
 
 Topic:
 {topic}
@@ -114,10 +66,10 @@ Topic:
 Selected Language:
 {language}
 
-Research Gathered:
+Research:
 {research}
 
-Use this structure:
+Structure:
 
 # Introduction
 
@@ -131,34 +83,20 @@ Provide at least 3 well-explained findings.
 
 List the source URLs found in the research.
 
-The report must be written in
-the selected language.
-""",
+Write the complete report in the selected language."""
         ),
     ]
 )
 
-writer_chain = (
-    writer_prompt
-    | llm
-    | StrOutputParser()
-)
-
-
-# ============================================================
-# CRITIC CHAIN
-# ============================================================
+writer_chain = writer_prompt | llm | StrOutputParser()
 
 critic_prompt = ChatPromptTemplate.from_messages(
     [
         (
             "system",
-            """
-You are a strict and constructive
-research quality evaluator.
+            """You are a strict and constructive research quality evaluator.
 
-Evaluate the report for:
-
+Evaluate:
 - factual quality
 - clarity
 - completeness
@@ -166,14 +104,11 @@ Evaluate the report for:
 - source quality
 - unsupported claims
 
-Write the evaluation in the
-selected language.
-""",
+Write the evaluation in the selected language."""
         ),
         (
             "human",
-            """
-Review this research report.
+            """Review this research report.
 
 Selected Language:
 {language}
@@ -194,14 +129,9 @@ Areas to Improve:
 - ...
 
 One line verdict:
-...
-""",
+..."""
         ),
     ]
 )
 
-critic_chain = (
-    critic_prompt
-    | llm
-    | StrOutputParser()
-)
+critic_chain = critic_prompt | llm | StrOutputParser()

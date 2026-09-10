@@ -10,10 +10,6 @@ from streamlit_mic_recorder import mic_recorder
 from pipeline import run_research_pipeline
 
 
-# ============================================================
-# PAGE CONFIG
-# ============================================================
-
 st.set_page_config(
     page_title="Multi-Agent AI Research System",
     page_icon="🤖",
@@ -22,30 +18,20 @@ st.set_page_config(
 )
 
 
-# ============================================================
-# SESSION STATE
-# ============================================================
-
 if "query" not in st.session_state:
     st.session_state.query = ""
 
 if "result" not in st.session_state:
     st.session_state.result = None
 
+if "pipeline_running" not in st.session_state:
+    st.session_state.pipeline_running = False
 
-# ============================================================
-# HTML HELPER
-# ============================================================
 
-def md(
-    html_string: str,
-) -> None:
-
+def md(html_string: str) -> None:
     flattened = "\n".join(
         line.strip()
-        for line in html_string.strip(
-            "\n"
-        ).split("\n")
+        for line in html_string.strip("\n").split("\n")
     )
 
     st.markdown(
@@ -53,10 +39,6 @@ def md(
         unsafe_allow_html=True,
     )
 
-
-# ============================================================
-# GROQ SPEECH TO TEXT
-# ============================================================
 
 def transcribe_audio(
     audio_bytes: bytes,
@@ -71,36 +53,42 @@ def transcribe_audio(
         else "en"
     )
 
-    transcription = (
-        client.audio.transcriptions.create(
-            file=(
-                "recording.webm",
-                audio_bytes,
-            ),
-            model="whisper-large-v3-turbo",
-            language=language_code,
-            response_format="json",
-            temperature=0,
-        )
+    transcription = client.audio.transcriptions.create(
+        file=(
+            "recording.webm",
+            audio_bytes,
+        ),
+        model="whisper-large-v3-turbo",
+        language=language_code,
+        response_format="json",
+        temperature=0,
     )
 
     return transcription.text.strip()
 
 
-# ============================================================
-# BROWSER TEXT TO SPEECH
-# ============================================================
-
 def speech_button(
     text: str,
     language: str,
     key: str,
-):
+) -> None:
 
     clean_text = re.sub(
         r"https?://\S+",
         "",
         text,
+    )
+
+    clean_text = re.sub(
+        r"\[([^\]]+)\]\([^)]+\)",
+        r"\1",
+        clean_text,
+    )
+
+    clean_text = re.sub(
+        r"[#*_`]",
+        "",
+        clean_text,
     )
 
     clean_text = clean_text[:3500]
@@ -111,65 +99,64 @@ def speech_button(
         else "en-US"
     )
 
-    encoded_text = json.dumps(
-        clean_text
-    )
+    encoded_text = json.dumps(clean_text)
+
+    button_id = f"speech_{key}"
 
     components.html(
         f"""
-        <button
-            onclick='speakResponse()'
-            style="
-                width:100%;
-                padding:12px;
-                border-radius:12px;
-                border:1px solid rgba(99,246,255,0.35);
-                background:
-                    linear-gradient(
-                        90deg,
-                        rgba(99,246,255,0.12),
-                        rgba(124,92,237,0.12)
-                    );
-                color:#efffff;
-                font-weight:800;
-                cursor:pointer;
-                font-size:14px;
-            "
-        >
-            🔊 SPEAK RESPONSE
-        </button>
+        <div style="width:100%;">
+            <button
+                id="{button_id}"
+                style="
+                    width:100%;
+                    padding:12px;
+                    border-radius:12px;
+                    border:1px solid rgba(99,246,255,0.35);
+                    background:
+                        linear-gradient(
+                            90deg,
+                            rgba(99,246,255,0.12),
+                            rgba(124,92,237,0.12)
+                        );
+                    color:#efffff;
+                    font-weight:800;
+                    cursor:pointer;
+                    font-size:14px;
+                "
+            >
+                🔊 SPEAK RESPONSE
+            </button>
+        </div>
 
         <script>
+            const button = document.getElementById("{button_id}");
 
-        function speakResponse() {{
+            button.addEventListener("click", function() {{
+                if (!window.speechSynthesis) {{
+                    return;
+                }}
 
-            window.speechSynthesis.cancel();
+                window.speechSynthesis.cancel();
 
-            const utterance =
-                new SpeechSynthesisUtterance(
-                    {encoded_text}
+                const utterance =
+                    new SpeechSynthesisUtterance(
+                        {encoded_text}
+                    );
+
+                utterance.lang = "{speech_language}";
+                utterance.rate = 0.95;
+                utterance.pitch = 1.0;
+
+                window.speechSynthesis.speak(
+                    utterance
                 );
-
-            utterance.lang =
-                "{speech_language}";
-
-            utterance.rate = 0.95;
-            utterance.pitch = 1.0;
-
-            window.speechSynthesis.speak(
-                utterance
-            );
-        }}
-
+            }});
         </script>
         """,
-        height=55,
+        height=58,
     )
 
-
-# ============================================================
-# PHASE DATA
-# ============================================================
 
 PHASES = [
     (
@@ -199,10 +186,6 @@ PHASES = [
 ]
 
 
-# ============================================================
-# PHASE UI
-# ============================================================
-
 def render_pipeline(
     placeholder,
     active_stage=None,
@@ -213,42 +196,26 @@ def render_pipeline(
 
     cards = []
 
-    for (
-        key,
-        icon,
-        name,
-        subtitle,
-    ) in PHASES:
+    for key, icon, name, subtitle in PHASES:
 
         if key in completed:
-
             css_class = "complete"
             status = "COMPLETE"
 
         elif key == active_stage:
-
             css_class = "active"
             status = "RUNNING"
 
         else:
-
             css_class = "waiting"
             status = "WAITING"
 
         cards.append(
             f"""
-            <div class="
-                phase-card {css_class}
-            ">
-
+            <div class="phase-card {css_class}">
                 <div class="phase-top">
-                    <span class="phase-icon">
-                        {icon}
-                    </span>
-
-                    <span class="phase-number">
-                        {key.upper()}
-                    </span>
+                    <span class="phase-icon">{icon}</span>
+                    <span class="phase-number">{key.upper()}</span>
                 </div>
 
                 <div class="phase-name">
@@ -263,47 +230,260 @@ def render_pipeline(
                     <span class="phase-dot"></span>
                     {status}
                 </div>
-
             </div>
             """
         )
 
-    placeholder.markdown(
-        f"""
-        <div class="phase-grid">
-            {"".join(cards)}
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
+    html = f"""
+    <style>
+        .phase-grid {{
+            display:grid;
+            grid-template-columns:repeat(4,1fr);
+            gap:14px;
+            width:100%;
+            margin-top:1.4rem;
+            margin-bottom:1.8rem;
+        }}
+
+        .phase-card {{
+            min-height:175px;
+            padding:1.25rem;
+            border-radius:20px;
+
+            background:
+                linear-gradient(
+                    145deg,
+                    rgba(255,255,255,0.045),
+                    rgba(255,255,255,0.012)
+                );
+
+            border:1px solid rgba(255,255,255,0.08);
+
+            transition:all 0.3s ease;
+
+            position:relative;
+            overflow:hidden;
+        }}
+
+        .phase-card.waiting {{
+            opacity:0.45;
+        }}
+
+        .phase-card.active {{
+            opacity:1;
+            border-color:rgba(99,246,255,0.7);
+
+            box-shadow:
+                0 0 45px rgba(99,246,255,0.14);
+
+            transform:translateY(-5px);
+        }}
+
+        .phase-card.active::after {{
+            content:"";
+            position:absolute;
+            inset:0;
+            border-radius:20px;
+
+            box-shadow:
+                inset 0 0 35px
+                rgba(99,246,255,0.08);
+
+            animation:
+                phasePulse 1.5s
+                ease-in-out infinite;
+
+            pointer-events:none;
+        }}
+
+        .phase-card.complete {{
+            opacity:0.95;
+
+            border-color:
+                rgba(0,255,170,0.45);
+
+            box-shadow:
+                0 0 24px
+                rgba(0,255,170,0.07);
+        }}
+
+        @keyframes phasePulse {{
+            0%, 100% {{
+                opacity:0.35;
+            }}
+
+            50% {{
+                opacity:1;
+            }}
+        }}
+
+        .phase-top {{
+            display:flex;
+            justify-content:space-between;
+            align-items:center;
+        }}
+
+        .phase-icon {{
+            font-size:2rem;
+        }}
+
+        .phase-number {{
+            color:#46566b;
+            font-family:monospace;
+            font-size:0.58rem;
+        }}
+
+        .phase-name {{
+            margin-top:0.65rem;
+            color:#f3f7fb;
+            font-size:0.94rem;
+            font-weight:800;
+        }}
+
+        .phase-subtitle {{
+            margin-top:0.3rem;
+            color:#68778c;
+            font-family:monospace;
+            font-size:0.6rem;
+            letter-spacing:0.7px;
+        }}
+
+        .phase-status {{
+            display:inline-flex;
+            align-items:center;
+            gap:6px;
+
+            margin-top:0.9rem;
+            padding:0.3rem 0.6rem;
+
+            border-radius:999px;
+
+            border:
+                1px solid
+                rgba(99,246,255,0.13);
+
+            background:
+                rgba(99,246,255,0.04);
+
+            color:#63f6ff;
+
+            font-family:monospace;
+            font-size:0.57rem;
+        }}
+
+        .phase-card.complete .phase-status {{
+            color:#6dffcb;
+
+            border-color:
+                rgba(0,255,170,0.2);
+        }}
+
+        .phase-dot {{
+            width:5px;
+            height:5px;
+            border-radius:50%;
+
+            background:#63f6ff;
+
+            box-shadow:
+                0 0 9px #63f6ff;
+        }}
+
+        .phase-card.complete .phase-dot {{
+            background:#00ffaa;
+
+            box-shadow:
+                0 0 9px #00ffaa;
+        }}
+
+        @media(max-width:900px) {{
+            .phase-grid {{
+                grid-template-columns:repeat(2,1fr);
+            }}
+        }}
+
+        @media(max-width:600px) {{
+            .phase-grid {{
+                grid-template-columns:1fr;
+            }}
+        }}
+    </style>
+
+    <div class="phase-grid">
+        {"".join(cards)}
+    </div>
+    """
+
+    with placeholder.container():
+        components.html(
+            html,
+            height=225,
+            scrolling=False,
+        )
 
 
-# ============================================================
-# CALLBACK
-# ============================================================
-
-def make_progress_callback(
-    placeholder,
-):
+def make_progress_callback(placeholder):
 
     completed = set()
 
-    def callback(
-        stage,
-        status,
-    ):
+    def callback(stage, status):
 
-        if status == "complete":
+        stage = str(stage).lower().strip()
+        status = str(status).lower().strip()
+
+        if stage in {
+            "search_agent",
+            "search",
+        }:
+            stage = "search"
+
+        elif stage in {
+            "reader_agent",
+            "reader",
+        }:
+            stage = "reader"
+
+        elif stage in {
+            "writer_chain",
+            "writer",
+        }:
+            stage = "writer"
+
+        elif stage in {
+            "critic_chain",
+            "critic",
+        }:
+            stage = "critic"
+
+        if status in {
+            "complete",
+            "completed",
+            "done",
+            "finished",
+        }:
 
             completed.add(stage)
 
+            next_stage = None
+
+            for phase_key, _, _, _ in PHASES:
+
+                if phase_key not in completed:
+                    next_stage = phase_key
+                    break
+
             render_pipeline(
                 placeholder,
-                None,
+                next_stage,
                 completed,
             )
 
-        else:
+        elif status in {
+            "running",
+            "start",
+            "started",
+            "in_progress",
+        }:
 
             render_pipeline(
                 placeholder,
@@ -314,20 +494,15 @@ def make_progress_callback(
     return callback
 
 
-# ============================================================
-# CSS
-# ============================================================
-
 md(
     """
     <style>
 
     * {
-        box-sizing: border-box;
+        box-sizing:border-box;
     }
 
     .stApp {
-
         min-height:100vh;
 
         background:
@@ -352,11 +527,8 @@ md(
     }
 
     .stApp::before {
-
         content:"";
-
         position:fixed;
-
         inset:0;
 
         background-image:
@@ -371,9 +543,7 @@ md(
             );
 
         background-size:46px 46px;
-
         pointer-events:none;
-
         z-index:0;
     }
 
@@ -390,25 +560,15 @@ md(
     }
 
     .block-container {
-
         max-width:1380px;
-
         padding-top:1rem;
         padding-bottom:4rem;
-
         position:relative;
-
         z-index:3;
     }
 
-    /* ========================================================
-       HERO
-       ======================================================== */
-
     .hero {
-
         text-align:center;
-
         padding:
             2.5rem
             1rem
@@ -416,7 +576,6 @@ md(
     }
 
     .hero-badge {
-
         display:inline-flex;
 
         padding:
@@ -434,14 +593,11 @@ md(
         color:#63f6ff;
 
         font-family:monospace;
-
         font-size:0.7rem;
-
         letter-spacing:1.5px;
     }
 
     .hero-title {
-
         margin-top:1rem;
 
         font-size:
@@ -452,9 +608,7 @@ md(
             );
 
         font-weight:800;
-
         line-height:1;
-
         letter-spacing:-2px;
 
         background:
@@ -467,28 +621,17 @@ md(
             );
 
         -webkit-background-clip:text;
-
         -webkit-text-fill-color:transparent;
     }
 
     .hero-subtitle {
-
         max-width:820px;
-
-        margin:
-            1.2rem auto 0;
-
+        margin:1.2rem auto 0;
         color:#909cad;
-
         line-height:1.8;
     }
 
-    /* ========================================================
-       COMMAND PANEL
-       ======================================================== */
-
     .command-panel {
-
         padding:1.6rem;
 
         border-radius:24px;
@@ -510,57 +653,36 @@ md(
     }
 
     .command-header {
-
         display:flex;
-
         justify-content:space-between;
-
         align-items:center;
-
         margin-bottom:1.3rem;
     }
 
     .command-title {
-
         color:#eafcff;
-
         font-size:1.05rem;
-
         font-weight:800;
     }
 
     .command-meta {
-
         color:#63f6ff;
-
         font-family:monospace;
-
         font-size:0.62rem;
     }
 
     .query-title {
-
         color:#63f6ff;
-
         font-family:monospace;
-
         font-size:0.72rem;
-
         letter-spacing:1.7px;
-
         margin-bottom:0.6rem;
     }
 
-    /* ========================================================
-       TEXT INPUT
-       ======================================================== */
-
     .stTextInput > div > div > input {
-
         min-height:62px;
 
         background:#080e17 !important;
-
         color:#ffffff !important;
 
         border:
@@ -578,7 +700,6 @@ md(
     }
 
     .stTextInput > div > div > input:focus {
-
         border-color:
             rgba(99,246,255,0.8)
             !important;
@@ -589,12 +710,7 @@ md(
             !important;
     }
 
-    /* ========================================================
-       SELECT
-       ======================================================== */
-
     div[data-baseweb="select"] > div {
-
         background:#080e17 !important;
 
         border:
@@ -605,14 +721,8 @@ md(
         border-radius:13px !important;
     }
 
-    /* ========================================================
-       BUTTON
-       ======================================================== */
-
     .stButton > button {
-
         width:100%;
-
         min-height:58px;
 
         border-radius:14px;
@@ -631,14 +741,11 @@ md(
         color:#efffff;
 
         font-weight:800;
-
         transition:0.25s ease;
     }
 
     .stButton > button:hover {
-
-        transform:
-            translateY(-2px);
+        transform:translateY(-2px);
 
         border-color:
             rgba(99,246,255,0.82);
@@ -648,14 +755,8 @@ md(
             rgba(99,246,255,0.12);
     }
 
-    /* ========================================================
-       MICROPHONE
-       ======================================================== */
-
     .voice-panel {
-
         margin-top:1rem;
-
         padding:1rem;
 
         border-radius:16px;
@@ -668,251 +769,16 @@ md(
             rgba(99,246,255,0.22);
 
         text-align:center;
-
         color:#93a0b3;
-
         font-size:0.78rem;
     }
 
-    /* ========================================================
-       PHASES
-       ======================================================== */
-
     .phase-grid {
-
-        display:grid;
-
-        grid-template-columns:
-            repeat(4,1fr);
-
-        gap:14px;
-
-        margin-top:1.4rem;
-
-        margin-bottom:1.8rem;
+        width:100%;
     }
-
-    .phase-card {
-
-        min-height:175px;
-
-        padding:1.25rem;
-
-        border-radius:20px;
-
-        background:
-            linear-gradient(
-                145deg,
-                rgba(255,255,255,0.045),
-                rgba(255,255,255,0.012)
-            );
-
-        border:
-            1px solid
-            rgba(255,255,255,0.08);
-
-        transition:
-            all 0.3s ease;
-
-        position:relative;
-
-        overflow:hidden;
-    }
-
-    .phase-card.waiting {
-
-        opacity:0.45;
-    }
-
-    .phase-card.active {
-
-        opacity:1;
-
-        border-color:
-            rgba(99,246,255,0.7);
-
-        box-shadow:
-            0 0 45px
-            rgba(99,246,255,0.14);
-
-        transform:
-            translateY(-5px);
-    }
-
-    .phase-card.active::after {
-
-        content:"";
-
-        position:absolute;
-
-        inset:0;
-
-        border-radius:20px;
-
-        box-shadow:
-            inset 0 0 35px
-            rgba(99,246,255,0.08);
-
-        animation:
-            phasePulse 1.5s
-            ease-in-out infinite;
-    }
-
-    .phase-card.complete {
-
-        opacity:0.95;
-
-        border-color:
-            rgba(0,255,170,0.45);
-
-        box-shadow:
-            0 0 24px
-            rgba(0,255,170,0.07);
-    }
-
-    @keyframes phasePulse {
-
-        0%,
-        100% {
-            opacity:0.35;
-        }
-
-        50% {
-            opacity:1;
-        }
-    }
-
-    .phase-top {
-
-        display:flex;
-
-        justify-content:space-between;
-
-        align-items:center;
-    }
-
-    .phase-icon {
-
-        font-size:2rem;
-    }
-
-    .phase-number {
-
-        color:#46566b;
-
-        font-family:monospace;
-
-        font-size:0.58rem;
-    }
-
-    .phase-name {
-
-        margin-top:0.65rem;
-
-        color:#f3f7fb;
-
-        font-size:0.94rem;
-
-        font-weight:800;
-    }
-
-    .phase-subtitle {
-
-        margin-top:0.3rem;
-
-        color:#68778c;
-
-        font-family:monospace;
-
-        font-size:0.6rem;
-
-        letter-spacing:0.7px;
-    }
-
-    .phase-status {
-
-        display:inline-flex;
-
-        align-items:center;
-
-        gap:6px;
-
-        margin-top:0.9rem;
-
-        padding:
-            0.3rem 0.6rem;
-
-        border-radius:999px;
-
-        border:
-            1px solid
-            rgba(99,246,255,0.13);
-
-        background:
-            rgba(99,246,255,0.04);
-
-        color:#63f6ff;
-
-        font-family:monospace;
-
-        font-size:0.57rem;
-    }
-
-    .phase-card.complete .phase-status {
-
-        color:#6dffcb;
-
-        border-color:
-            rgba(0,255,170,0.2);
-    }
-
-    .phase-dot {
-
-        width:5px;
-
-        height:5px;
-
-        border-radius:50%;
-
-        background:#63f6ff;
-
-        box-shadow:
-            0 0 9px #63f6ff;
-    }
-
-    .phase-card.complete
-    .phase-dot {
-
-        background:#00ffaa;
-
-        box-shadow:
-            0 0 9px #00ffaa;
-    }
-
-    /* ========================================================
-       STATUS
-       ======================================================== */
-
-    [data-testid="stStatus"] {
-
-        border-radius:18px;
-
-        background:
-            rgba(7,12,21,0.84);
-
-        border:
-            1px solid
-            rgba(99,246,255,0.12);
-    }
-
-    /* ========================================================
-       OUTPUT
-       ======================================================== */
 
     .output-wrapper {
-
         margin-top:1rem;
-
         padding:1.8rem;
 
         border-radius:22px;
@@ -926,7 +792,6 @@ md(
     }
 
     .status-pill {
-
         display:inline-flex;
 
         padding:
@@ -944,22 +809,24 @@ md(
             rgba(99,246,255,0.15);
 
         font-family:monospace;
-
         font-size:0.62rem;
-
         letter-spacing:1px;
-
         margin-bottom:1rem;
     }
 
-    /* ========================================================
-       TABS
-       ======================================================== */
+    [data-testid="stStatus"] {
+        border-radius:18px;
+
+        background:
+            rgba(7,12,21,0.84);
+
+        border:
+            1px solid
+            rgba(99,246,255,0.12);
+    }
 
     .stTabs [data-baseweb="tab-list"] {
-
         gap:4px;
-
         padding:4px;
 
         background:
@@ -969,48 +836,32 @@ md(
     }
 
     .stTabs [data-baseweb="tab"] {
-
         border-radius:10px;
-
         color:#78869a;
-
         font-size:0.8rem;
     }
 
     .stTabs [aria-selected="true"] {
-
         color:#63f6ff;
 
         background:
             rgba(99,246,255,0.08);
     }
 
-    /* ========================================================
-       RESPONSIVE
-       ======================================================== */
+    [data-testid="stToggle"] {
+        margin-top:0.4rem;
+    }
+
+    [data-testid="stToggle"] label {
+        color:#dcecff !important;
+        font-weight:700 !important;
+    }
 
     @media(max-width:900px) {
 
-        .phase-grid {
-
-            grid-template-columns:
-                repeat(2,1fr);
-        }
-    }
-
-    @media(max-width:600px) {
-
-        .phase-grid {
-
-            grid-template-columns:1fr;
-        }
-
         .command-header {
-
             flex-direction:column;
-
             align-items:flex-start;
-
             gap:7px;
         }
     }
@@ -1019,10 +870,6 @@ md(
     """
 )
 
-
-# ============================================================
-# HERO
-# ============================================================
 
 md(
     """
@@ -1046,10 +893,6 @@ md(
     """
 )
 
-
-# ============================================================
-# COMMAND HEADER
-# ============================================================
 
 md(
     """
@@ -1076,10 +919,6 @@ md(
 )
 
 
-# ============================================================
-# QUERY INPUT
-# ============================================================
-
 topic = st.text_input(
     "Research query",
     value=st.session_state.query,
@@ -1091,10 +930,6 @@ topic = st.text_input(
     key="query",
 )
 
-
-# ============================================================
-# LANGUAGE + START
-# ============================================================
 
 language_col, button_col = st.columns(
     [1, 1]
@@ -1116,14 +951,18 @@ with language_col:
 with button_col:
 
     run_button = st.button(
-        "🚀  START RESEARCH",
+        "🚀 START RESEARCH",
         type="primary",
+        disabled=st.session_state.pipeline_running,
     )
 
 
-# ============================================================
-# VOICE
-# ============================================================
+speak_enabled = st.toggle(
+    "🔊 Speak Response",
+    value=False,
+    key="speak_response_toggle",
+)
+
 
 md(
     """
@@ -1160,9 +999,7 @@ if audio:
 
         if transcript:
 
-            st.session_state.query = (
-                transcript
-            )
+            st.session_state.query = transcript
 
             st.success(
                 f"Voice query: {transcript}"
@@ -1177,10 +1014,6 @@ if audio:
         )
 
 
-# ============================================================
-# RUN PIPELINE
-# ============================================================
-
 if run_button:
 
     if not topic.strip():
@@ -1190,6 +1023,8 @@ if run_button:
         )
 
         st.stop()
+
+    st.session_state.pipeline_running = True
 
     progress_placeholder = st.empty()
 
@@ -1204,10 +1039,8 @@ if run_button:
             expanded=True,
         ) as status:
 
-            callback = (
-                make_progress_callback(
-                    progress_placeholder
-                )
+            callback = make_progress_callback(
+                progress_placeholder
             )
 
             status.write(
@@ -1215,10 +1048,17 @@ if run_button:
             )
 
             result = run_research_pipeline(
-                topic=topic,
+                topic=topic.strip(),
                 language=language,
                 progress_callback=callback,
             )
+
+            for phase_key, _, _, _ in PHASES:
+
+                callback(
+                    phase_key,
+                    "complete",
+                )
 
             status.write(
                 "AI response generated."
@@ -1238,31 +1078,24 @@ if run_button:
             f"Pipeline failed: {exc}"
         )
 
-        st.stop()
+    finally:
 
+        st.session_state.pipeline_running = False
 
-# ============================================================
-# DISPLAY RESULT
-# ============================================================
 
 result = st.session_state.result
 
 
 if result:
 
-    st.markdown(
-        "---"
-    )
-
-    # ========================================================
-    # WEATHER
-    # ========================================================
+    st.markdown("---")
 
     if result.get("mode") == "weather":
 
         md(
             """
             <div class="output-wrapper">
+
                 <div class="status-pill">
                     ● LIVE WEATHER
                 </div>
@@ -1277,11 +1110,13 @@ if result:
             result["weather"]
         )
 
-        speech_button(
-            result["weather"],
-            result["language"],
-            "weather_speech",
-        )
+        if speak_enabled:
+
+            speech_button(
+                result["weather"],
+                result["language"],
+                "weather_speech",
+            )
 
         md(
             """
@@ -1289,15 +1124,12 @@ if result:
             """
         )
 
-    # ========================================================
-    # RESEARCH
-    # ========================================================
-
     else:
 
         md(
             """
             <div class="output-wrapper">
+
                 <div class="status-pill">
                     ● GENERATED RESEARCH
                 </div>
@@ -1313,25 +1145,19 @@ if result:
             ]
         )
 
-        # ----------------------------------------------------
-        # REPORT
-        # ----------------------------------------------------
-
         with tabs[0]:
 
             st.markdown(
                 result["report"]
             )
 
-            speech_button(
-                result["report"],
-                result["language"],
-                "report_speech",
-            )
+            if speak_enabled:
 
-        # ----------------------------------------------------
-        # CRITIQUE
-        # ----------------------------------------------------
+                speech_button(
+                    result["report"],
+                    result["language"],
+                    "report_speech",
+                )
 
         with tabs[1]:
 
@@ -1339,25 +1165,19 @@ if result:
                 result["feedback"]
             )
 
-            speech_button(
-                result["feedback"],
-                result["language"],
-                "critique_speech",
-            )
+            if speak_enabled:
 
-        # ----------------------------------------------------
-        # SEARCH
-        # ----------------------------------------------------
+                speech_button(
+                    result["feedback"],
+                    result["language"],
+                    "critique_speech",
+                )
 
         with tabs[2]:
 
             st.markdown(
                 result["search_results"]
             )
-
-        # ----------------------------------------------------
-        # SCRAPED
-        # ----------------------------------------------------
 
         with tabs[3]:
 
@@ -1371,10 +1191,6 @@ if result:
             """
         )
 
-
-# ============================================================
-# FOOTER
-# ============================================================
 
 md(
     """
