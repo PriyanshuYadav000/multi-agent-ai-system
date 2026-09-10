@@ -41,7 +41,6 @@ if "pipeline_running" not in st.session_state:
 
 
 def md(html_string: str) -> None:
-
     flattened = "\n".join(
         line.strip()
         for line in html_string.strip("\n").split("\n")
@@ -123,7 +122,6 @@ def speech_button(
     components.html(
         f"""
         <div style="width:100%;">
-
             <button
                 id="{button_id}"
                 style="
@@ -131,33 +129,26 @@ def speech_button(
                     padding:12px;
                     border-radius:12px;
                     border:1px solid rgba(99,246,255,0.35);
-
                     background:
                         linear-gradient(
                             90deg,
                             rgba(99,246,255,0.12),
                             rgba(124,92,237,0.12)
                         );
-
                     color:#efffff;
                     font-weight:800;
                     cursor:pointer;
                     font-size:14px;
-
                     transition:all 0.2s ease;
                 "
             >
                 🔊 SPEAK RESPONSE
             </button>
-
         </div>
 
         <script>
-
             const button =
-                document.getElementById(
-                    "{button_id}"
-                );
+                document.getElementById("{button_id}");
 
             let speaking = false;
 
@@ -226,7 +217,6 @@ def speech_button(
                     );
                 }}
             );
-
         </script>
         """,
         height=58,
@@ -274,17 +264,14 @@ def render_pipeline(
     for key, icon, name, subtitle in PHASES:
 
         if key in completed:
-
             css_class = "complete"
             status = "COMPLETE"
 
         elif key == active_stage:
-
             css_class = "active"
             status = "RUNNING"
 
         else:
-
             css_class = "waiting"
             status = "WAITING"
 
@@ -480,7 +467,6 @@ def render_pipeline(
         .phase-dot {{
             width:5px;
             height:5px;
-
             border-radius:50%;
 
             background:#63f6ff;
@@ -533,10 +519,7 @@ def make_progress_callback(
 
     completed = set()
 
-    def callback(
-        stage,
-        status,
-    ):
+    def callback(stage, status):
 
         stage = str(
             stage
@@ -547,30 +530,17 @@ def make_progress_callback(
         ).lower().strip()
 
         stage_map = {
+            "search": "search",
+            "search_agent": "search",
 
-            "search":
-                "search",
+            "reader": "reader",
+            "reader_agent": "reader",
 
-            "search_agent":
-                "search",
+            "writer": "writer",
+            "writer_chain": "writer",
 
-            "reader":
-                "reader",
-
-            "reader_agent":
-                "reader",
-
-            "writer":
-                "writer",
-
-            "writer_chain":
-                "writer",
-
-            "critic":
-                "critic",
-
-            "critic_chain":
-                "critic",
+            "critic": "critic",
+            "critic_chain": "critic",
         }
 
         stage = stage_map.get(
@@ -601,7 +571,6 @@ def make_progress_callback(
                 if phase_key not in completed:
 
                     next_stage = phase_key
-
                     break
 
             render_pipeline(
@@ -873,18 +842,13 @@ md(
             rgba(99,246,255,0.32)
             !important;
 
-        border-radius:
-            15px
-            !important;
+        border-radius:15px !important;
 
-        font-size:
-            1.03rem
-            !important;
+        font-size:1.03rem !important;
 
         padding:
             0.8rem
-            1.1rem
-            !important;
+            1.1rem !important;
     }
 
     .stTextInput > div > div > input:focus {
@@ -908,9 +872,7 @@ md(
             rgba(255,255,255,0.12)
             !important;
 
-        border-radius:
-            13px
-            !important;
+        border-radius:13px !important;
     }
 
     .stButton > button {
