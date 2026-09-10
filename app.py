@@ -1,4 +1,5 @@
 import json
+import os
 import re
 
 import streamlit as st
@@ -18,6 +19,17 @@ st.set_page_config(
 )
 
 
+try:
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+except Exception:
+    GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+
+
+if not GROQ_API_KEY:
+    st.error("GROQ_API_KEY is not configured.")
+    st.stop()
+
+
 if "query" not in st.session_state:
     st.session_state.query = ""
 
@@ -29,6 +41,7 @@ if "pipeline_running" not in st.session_state:
 
 
 def md(html_string: str) -> None:
+
     flattened = "\n".join(
         line.strip()
         for line in html_string.strip("\n").split("\n")
@@ -45,7 +58,9 @@ def transcribe_audio(
     language: str,
 ) -> str:
 
-    client = Groq()
+    client = Groq(
+        api_key=GROQ_API_KEY
+    )
 
     language_code = (
         "hi"
@@ -99,13 +114,16 @@ def speech_button(
         else "en-US"
     )
 
-    encoded_text = json.dumps(clean_text)
+    encoded_text = json.dumps(
+        clean_text
+    )
 
     button_id = f"speech_{key}"
 
     components.html(
         f"""
         <div style="width:100%;">
+
             <button
                 id="{button_id}"
                 style="
@@ -113,45 +131,102 @@ def speech_button(
                     padding:12px;
                     border-radius:12px;
                     border:1px solid rgba(99,246,255,0.35);
+
                     background:
                         linear-gradient(
                             90deg,
                             rgba(99,246,255,0.12),
                             rgba(124,92,237,0.12)
                         );
+
                     color:#efffff;
                     font-weight:800;
                     cursor:pointer;
                     font-size:14px;
+
+                    transition:all 0.2s ease;
                 "
             >
                 🔊 SPEAK RESPONSE
             </button>
+
         </div>
 
         <script>
-            const button = document.getElementById("{button_id}");
 
-            button.addEventListener("click", function() {{
-                if (!window.speechSynthesis) {{
-                    return;
-                }}
-
-                window.speechSynthesis.cancel();
-
-                const utterance =
-                    new SpeechSynthesisUtterance(
-                        {encoded_text}
-                    );
-
-                utterance.lang = "{speech_language}";
-                utterance.rate = 0.95;
-                utterance.pitch = 1.0;
-
-                window.speechSynthesis.speak(
-                    utterance
+            const button =
+                document.getElementById(
+                    "{button_id}"
                 );
-            }});
+
+            let speaking = false;
+
+            button.addEventListener(
+                "click",
+                function() {{
+
+                    if (!window.speechSynthesis) {{
+                        return;
+                    }}
+
+                    if (speaking) {{
+
+                        window.speechSynthesis.cancel();
+
+                        speaking = false;
+
+                        button.innerHTML =
+                            "🔊 SPEAK RESPONSE";
+
+                        return;
+                    }}
+
+                    window.speechSynthesis.cancel();
+
+                    const utterance =
+                        new SpeechSynthesisUtterance(
+                            {encoded_text}
+                        );
+
+                    utterance.lang =
+                        "{speech_language}";
+
+                    utterance.rate = 0.95;
+                    utterance.pitch = 1.0;
+
+                    utterance.onstart =
+                        function() {{
+
+                            speaking = true;
+
+                            button.innerHTML =
+                                "⏹️ STOP SPEAKING";
+                        }};
+
+                    utterance.onend =
+                        function() {{
+
+                            speaking = false;
+
+                            button.innerHTML =
+                                "🔊 SPEAK RESPONSE";
+                        }};
+
+                    utterance.onerror =
+                        function() {{
+
+                            speaking = false;
+
+                            button.innerHTML =
+                                "🔊 SPEAK RESPONSE";
+                        }};
+
+                    window.speechSynthesis.speak(
+                        utterance
+                    );
+                }}
+            );
+
         </script>
         """,
         height=58,
@@ -199,23 +274,34 @@ def render_pipeline(
     for key, icon, name, subtitle in PHASES:
 
         if key in completed:
+
             css_class = "complete"
             status = "COMPLETE"
 
         elif key == active_stage:
+
             css_class = "active"
             status = "RUNNING"
 
         else:
+
             css_class = "waiting"
             status = "WAITING"
 
         cards.append(
             f"""
             <div class="phase-card {css_class}">
+
                 <div class="phase-top">
-                    <span class="phase-icon">{icon}</span>
-                    <span class="phase-number">{key.upper()}</span>
+
+                    <span class="phase-icon">
+                        {icon}
+                    </span>
+
+                    <span class="phase-number">
+                        {key.upper()}
+                    </span>
+
                 </div>
 
                 <div class="phase-name">
@@ -230,12 +316,14 @@ def render_pipeline(
                     <span class="phase-dot"></span>
                     {status}
                 </div>
+
             </div>
             """
         )
 
     html = f"""
     <style>
+
         .phase-grid {{
             display:grid;
             grid-template-columns:repeat(4,1fr);
@@ -257,9 +345,12 @@ def render_pipeline(
                     rgba(255,255,255,0.012)
                 );
 
-            border:1px solid rgba(255,255,255,0.08);
+            border:
+                1px solid
+                rgba(255,255,255,0.08);
 
-            transition:all 0.3s ease;
+            transition:
+                all 0.3s ease;
 
             position:relative;
             overflow:hidden;
@@ -271,18 +362,24 @@ def render_pipeline(
 
         .phase-card.active {{
             opacity:1;
-            border-color:rgba(99,246,255,0.7);
+
+            border-color:
+                rgba(99,246,255,0.7);
 
             box-shadow:
-                0 0 45px rgba(99,246,255,0.14);
+                0 0 45px
+                rgba(99,246,255,0.14);
 
-            transform:translateY(-5px);
+            transform:
+                translateY(-5px);
         }}
 
         .phase-card.active::after {{
             content:"";
+
             position:absolute;
             inset:0;
+
             border-radius:20px;
 
             box-shadow:
@@ -308,7 +405,9 @@ def render_pipeline(
         }}
 
         @keyframes phasePulse {{
-            0%, 100% {{
+
+            0%,
+            100% {{
                 opacity:0.35;
             }}
 
@@ -381,6 +480,7 @@ def render_pipeline(
         .phase-dot {{
             width:5px;
             height:5px;
+
             border-radius:50%;
 
             background:#63f6ff;
@@ -397,16 +497,20 @@ def render_pipeline(
         }}
 
         @media(max-width:900px) {{
+
             .phase-grid {{
-                grid-template-columns:repeat(2,1fr);
+                grid-template-columns:
+                    repeat(2,1fr);
             }}
         }}
 
         @media(max-width:600px) {{
+
             .phase-grid {{
                 grid-template-columns:1fr;
             }}
         }}
+
     </style>
 
     <div class="phase-grid">
@@ -414,46 +518,65 @@ def render_pipeline(
     </div>
     """
 
-    with placeholder.container():
-        components.html(
-            html,
-            height=225,
-            scrolling=False,
-        )
+    placeholder.empty()
+
+    components.html(
+        html,
+        height=225,
+        scrolling=False,
+    )
 
 
-def make_progress_callback(placeholder):
+def make_progress_callback(
+    placeholder,
+):
 
     completed = set()
 
-    def callback(stage, status):
+    def callback(
+        stage,
+        status,
+    ):
 
-        stage = str(stage).lower().strip()
-        status = str(status).lower().strip()
+        stage = str(
+            stage
+        ).lower().strip()
 
-        if stage in {
-            "search_agent",
-            "search",
-        }:
-            stage = "search"
+        status = str(
+            status
+        ).lower().strip()
 
-        elif stage in {
-            "reader_agent",
-            "reader",
-        }:
-            stage = "reader"
+        stage_map = {
 
-        elif stage in {
-            "writer_chain",
-            "writer",
-        }:
-            stage = "writer"
+            "search":
+                "search",
 
-        elif stage in {
-            "critic_chain",
-            "critic",
-        }:
-            stage = "critic"
+            "search_agent":
+                "search",
+
+            "reader":
+                "reader",
+
+            "reader_agent":
+                "reader",
+
+            "writer":
+                "writer",
+
+            "writer_chain":
+                "writer",
+
+            "critic":
+                "critic",
+
+            "critic_chain":
+                "critic",
+        }
+
+        stage = stage_map.get(
+            stage,
+            stage,
+        )
 
         if status in {
             "complete",
@@ -462,14 +585,23 @@ def make_progress_callback(placeholder):
             "finished",
         }:
 
-            completed.add(stage)
+            completed.add(
+                stage
+            )
 
             next_stage = None
 
-            for phase_key, _, _, _ in PHASES:
+            for (
+                phase_key,
+                _,
+                _,
+                _,
+            ) in PHASES:
 
                 if phase_key not in completed:
+
                     next_stage = phase_key
+
                     break
 
             render_pipeline(
@@ -503,6 +635,7 @@ md(
     }
 
     .stApp {
+
         min-height:100vh;
 
         background:
@@ -511,11 +644,13 @@ md(
                 rgba(0,234,255,0.13),
                 transparent 28%
             ),
+
             radial-gradient(
                 circle at 90% 15%,
                 rgba(124,58,237,0.14),
                 transparent 30%
             ),
+
             linear-gradient(
                 180deg,
                 #02050a 0%,
@@ -527,15 +662,20 @@ md(
     }
 
     .stApp::before {
+
         content:"";
+
         position:fixed;
+
         inset:0;
 
         background-image:
+
             linear-gradient(
                 rgba(90,240,255,0.025) 1px,
                 transparent 1px
             ),
+
             linear-gradient(
                 90deg,
                 rgba(90,240,255,0.025) 1px,
@@ -543,7 +683,9 @@ md(
             );
 
         background-size:46px 46px;
+
         pointer-events:none;
+
         z-index:0;
     }
 
@@ -560,15 +702,22 @@ md(
     }
 
     .block-container {
+
         max-width:1380px;
+
         padding-top:1rem;
+
         padding-bottom:4rem;
+
         position:relative;
+
         z-index:3;
     }
 
     .hero {
+
         text-align:center;
+
         padding:
             2.5rem
             1rem
@@ -576,10 +725,12 @@ md(
     }
 
     .hero-badge {
+
         display:inline-flex;
 
         padding:
-            0.5rem 1rem;
+            0.5rem
+            1rem;
 
         border-radius:999px;
 
@@ -593,11 +744,14 @@ md(
         color:#63f6ff;
 
         font-family:monospace;
+
         font-size:0.7rem;
+
         letter-spacing:1.5px;
     }
 
     .hero-title {
+
         margin-top:1rem;
 
         font-size:
@@ -608,7 +762,9 @@ md(
             );
 
         font-weight:800;
+
         line-height:1;
+
         letter-spacing:-2px;
 
         background:
@@ -621,17 +777,26 @@ md(
             );
 
         -webkit-background-clip:text;
+
         -webkit-text-fill-color:transparent;
     }
 
     .hero-subtitle {
+
         max-width:820px;
-        margin:1.2rem auto 0;
+
+        margin:
+            1.2rem
+            auto
+            0;
+
         color:#909cad;
+
         line-height:1.8;
     }
 
     .command-panel {
+
         padding:1.6rem;
 
         border-radius:24px;
@@ -653,36 +818,54 @@ md(
     }
 
     .command-header {
+
         display:flex;
-        justify-content:space-between;
+
+        justify-content:
+            space-between;
+
         align-items:center;
+
         margin-bottom:1.3rem;
     }
 
     .command-title {
+
         color:#eafcff;
+
         font-size:1.05rem;
+
         font-weight:800;
     }
 
     .command-meta {
+
         color:#63f6ff;
+
         font-family:monospace;
+
         font-size:0.62rem;
     }
 
     .query-title {
+
         color:#63f6ff;
+
         font-family:monospace;
+
         font-size:0.72rem;
+
         letter-spacing:1.7px;
+
         margin-bottom:0.6rem;
     }
 
     .stTextInput > div > div > input {
+
         min-height:62px;
 
         background:#080e17 !important;
+
         color:#ffffff !important;
 
         border:
@@ -690,16 +873,22 @@ md(
             rgba(99,246,255,0.32)
             !important;
 
-        border-radius:15px !important;
+        border-radius:
+            15px
+            !important;
 
-        font-size:1.03rem !important;
+        font-size:
+            1.03rem
+            !important;
 
         padding:
             0.8rem
-            1.1rem !important;
+            1.1rem
+            !important;
     }
 
     .stTextInput > div > div > input:focus {
+
         border-color:
             rgba(99,246,255,0.8)
             !important;
@@ -711,6 +900,7 @@ md(
     }
 
     div[data-baseweb="select"] > div {
+
         background:#080e17 !important;
 
         border:
@@ -718,11 +908,15 @@ md(
             rgba(255,255,255,0.12)
             !important;
 
-        border-radius:13px !important;
+        border-radius:
+            13px
+            !important;
     }
 
     .stButton > button {
+
         width:100%;
+
         min-height:58px;
 
         border-radius:14px;
@@ -741,11 +935,15 @@ md(
         color:#efffff;
 
         font-weight:800;
-        transition:0.25s ease;
+
+        transition:
+            0.25s ease;
     }
 
     .stButton > button:hover {
-        transform:translateY(-2px);
+
+        transform:
+            translateY(-2px);
 
         border-color:
             rgba(99,246,255,0.82);
@@ -756,7 +954,9 @@ md(
     }
 
     .voice-panel {
+
         margin-top:1rem;
+
         padding:1rem;
 
         border-radius:16px;
@@ -769,16 +969,16 @@ md(
             rgba(99,246,255,0.22);
 
         text-align:center;
+
         color:#93a0b3;
+
         font-size:0.78rem;
     }
 
-    .phase-grid {
-        width:100%;
-    }
-
     .output-wrapper {
+
         margin-top:1rem;
+
         padding:1.8rem;
 
         border-radius:22px;
@@ -792,10 +992,12 @@ md(
     }
 
     .status-pill {
+
         display:inline-flex;
 
         padding:
-            0.35rem 0.75rem;
+            0.35rem
+            0.75rem;
 
         border-radius:999px;
 
@@ -809,12 +1011,16 @@ md(
             rgba(99,246,255,0.15);
 
         font-family:monospace;
+
         font-size:0.62rem;
+
         letter-spacing:1px;
+
         margin-bottom:1rem;
     }
 
     [data-testid="stStatus"] {
+
         border-radius:18px;
 
         background:
@@ -826,7 +1032,9 @@ md(
     }
 
     .stTabs [data-baseweb="tab-list"] {
+
         gap:4px;
+
         padding:4px;
 
         background:
@@ -836,12 +1044,16 @@ md(
     }
 
     .stTabs [data-baseweb="tab"] {
+
         border-radius:10px;
+
         color:#78869a;
+
         font-size:0.8rem;
     }
 
     .stTabs [aria-selected="true"] {
+
         color:#63f6ff;
 
         background:
@@ -849,19 +1061,27 @@ md(
     }
 
     [data-testid="stToggle"] {
-        margin-top:0.4rem;
+
+        margin-top:0.5rem;
     }
 
     [data-testid="stToggle"] label {
+
         color:#dcecff !important;
+
         font-weight:700 !important;
     }
 
     @media(max-width:900px) {
 
         .command-header {
-            flex-direction:column;
-            align-items:flex-start;
+
+            flex-direction:
+                column;
+
+            align-items:
+                flex-start;
+
             gap:7px;
         }
     }
@@ -1053,7 +1273,12 @@ if run_button:
                 progress_callback=callback,
             )
 
-            for phase_key, _, _, _ in PHASES:
+            for (
+                phase_key,
+                _,
+                _,
+                _,
+            ) in PHASES:
 
                 callback(
                     phase_key,
