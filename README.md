@@ -1,6 +1,20 @@
 # 🤖 Multi-Agent AI Research System
 
-> An autonomous multi-agent research pipeline that searches the live web, extracts source knowledge, generates a structured research report, and automatically evaluates the final result.
+> An autonomous multi-agent AI research application that searches the live web, extracts source knowledge, generates a structured research report, and evaluates the final result with an AI critic.
+
+## 🌐 Live Demo
+
+🚀 **Try the deployed application:**  
+https://multi-agent-ai-system-rnq6zeu2j2jdx2apsr8vvv.streamlit.app/
+
+## 📦 Source Code
+
+🔗 **GitHub Repository:**  
+https://github.com/PriyanshuYadav000/multi-agent-ai-system
+
+---
+
+## 🛠️ Tech Stack
 
 ![Python](https://img.shields.io/badge/Python-3.x-blue)
 ![LangChain](https://img.shields.io/badge/LangChain-Agentic%20AI-green)
@@ -8,602 +22,586 @@
 ![Tavily](https://img.shields.io/badge/Tavily-Web%20Search-purple)
 ![Streamlit](https://img.shields.io/badge/Streamlit-Frontend-red)
 ![BeautifulSoup](https://img.shields.io/badge/BeautifulSoup-Web%20Scraping-yellow)
+![OpenWeather](https://img.shields.io/badge/OpenWeather-Live%20Weather-blue)
 
 ---
 
-## 📌 Overview
+# 📌 Overview
 
-The **Multi-Agent AI Research System** is an AI-powered research application designed to automate the process of researching a topic from multiple stages.
+The **Multi-Agent AI Research System** is an AI-powered research application designed to automate the process of researching a topic through multiple specialized stages.
 
-Instead of asking a single LLM to directly generate an answer, the system separates the task into specialized components:
+Instead of asking a single LLM to directly generate an answer, the system separates the task into multiple stages:
 
 ```text
-User Topic
+User Query
     ↓
-Search Agent
+Query Detection
     ↓
-Reader Agent
+Live Web Search
+    ↓
+Source Extraction
+    ↓
+Web Scraping
     ↓
 Writer Chain
     ↓
 Critic Chain
     ↓
-Final Research Report + Quality Review
-```
+Final Research Report
 
-Each stage has a specific responsibility, creating a more structured and controllable research workflow.
+The application also supports:
 
-The project also includes a futuristic **Streamlit frontend** that visualizes the research pipeline and displays the generated report, critique, search results, and scraped source content.
+🌐 Live web research using Tavily
+📝 Structured AI research reports
+🧠 AI-based quality evaluation
+🌦️ Live weather queries using OpenWeather
+🇬🇧 English output
+🇮🇳 Hindi output
+🎙️ Speech-to-text using Groq Whisper
+🔎 Search result inspection
+📖 Scraped source inspection
+🚀 Streamlit deployment
+🛡️ Retry and token-management logic for LLM rate limits
+🧠 System Architecture
+🏗️ Architecture Components
+1. 🔎 Live Web Search
 
----
+The research pipeline uses Tavily to retrieve current information from the web.
 
-# 🧠 Architecture
-The system follows a sequential multi-agent architecture.
-
-```mermaid
-flowchart TD
-
-    A[👤 User enters research topic] --> B[🔎 Search Agent]
-
-    B -->|Tavily Web Search| C[Search Results]
-
-    C --> D[📖 Reader Agent]
-
-    D -->|BeautifulSoup + Requests| E[Scraped Source Content]
-
-    C --> F[📝 Writer Chain]
-    E --> F
-
-    F -->|LangChain LCEL + Groq LLM| G[Generated Research Report]
-
-    G --> H[🧠 Critic Chain]
-
-    H -->|LLM Evaluation| I[Quality Review]
-
-    G --> J[📊 Streamlit UI]
-    I --> J
-    C --> J
-    E --> J
-```
-
-### Architecture Components
-
-### 1. Search Agent 🔎
-
-The Search Agent is responsible for finding recent and relevant information from the web.
-
-It uses:
-
-* **LangChain Agent**
-* **Tavily Search API**
-
-The agent receives the research topic and searches for useful sources, returning titles, URLs, and snippets.
-
-```text
-Topic
-  ↓
-Search Agent
-  ↓
-Tavily
-  ↓
-Relevant web sources
-```
-
----
-
-### 2. Reader Agent 📖
-
-The Reader Agent takes the search results and identifies a useful source to investigate more deeply.
-
-It uses:
-
-* `requests`
-* `BeautifulSoup`
-* LangChain tool calling
-
-The webpage is downloaded, unnecessary elements such as scripts, styles, navigation, and footers are removed, and useful text is extracted.
-
-```text
+Research Topic
+      ↓
+Tavily Search
+      ↓
 Search Results
       ↓
-Relevant URL
+Relevant Sources
+
+The search stage collects:
+
+Titles
+URLs
+Snippets
+Source metadata
+
+The search stage is kept separate from report generation so the retrieved information can be inspected before the final report is produced.
+
+2. 📖 Source Extraction & Web Scraping
+
+After receiving search results, the system extracts real URLs and retrieves webpage content.
+
+Technologies used:
+
+requests
+BeautifulSoup
+Search Results
       ↓
-Requests
+Real URL
+      ↓
+HTTP Request
       ↓
 BeautifulSoup
       ↓
-Clean source text
-```
+Clean Source Text
 
----
+The scraper attempts to remove unnecessary webpage elements and retain readable source content.
 
-### 3. Writer Chain ✍️
+This allows the Writer Chain to work with actual source material rather than relying only on search snippets.
 
-The Writer Chain combines:
+3. 📝 Writer Chain
 
-* Search results
-* Scraped source content
-* Research topic
+The Writer Chain generates the structured research report.
 
-and sends them to the LLM using a structured prompt.
+It combines:
 
-The generated report follows:
+Research topic
+Tavily search results
+Scraped source content
 
-```text
+The project uses LangChain Expression Language (LCEL):
+
+writer_chain = writer_prompt | llm | StrOutputParser()
+
+The generated research report follows a structured format:
+
 Introduction
-      ↓
+    ↓
 Key Findings
-      ↓
+    ↓
+Analysis
+    ↓
 Conclusion
-      ↓
+    ↓
 Sources
-```
+4. 🧠 Critic Chain
 
-The chain is implemented using **LangChain LCEL**:
+The Critic Chain evaluates the generated report separately from the Writer Chain.
 
-```python
-writer_chain = writer_prompt | llm | StrOutputParser()
-```
+It checks for:
 
-This helped me understand how modern LangChain chains can be composed as a pipeline instead of manually managing every LLM call.
+Strengths
+Weaknesses
+Missing information
+Relevance
+Overall quality
+Final verdict
 
----
+The workflow is:
 
-### 4. Critic Chain 🧠
+Generated Report
+       ↓
+   AI Critic
+       ↓
+Quality Evaluation
 
-The Critic Chain evaluates the generated research report.
+This creates a second AI perspective instead of blindly trusting the initial generated report.
 
-It checks the report for:
+5. ⚙️ Pipeline Orchestrator
 
-* Strengths
-* Weaknesses
-* Areas for improvement
-* Overall quality score
-* Final verdict
+pipeline.py coordinates the complete workflow.
 
-The output follows:
+The research pipeline passes information between stages using shared state:
 
-```text
-Score: X/10
-
-Strengths:
-- ...
-- ...
-
-Areas to Improve:
-- ...
-- ...
-
-One line verdict:
-...
-```
-
-This creates a second AI perspective instead of blindly trusting the generated report.
-
----
-
-### 5. Pipeline Orchestrator ⚙️
-
-`pipeline.py` coordinates the complete workflow.
-
-The shared state is stored in a Python dictionary:
-
-```python
-state = {}
-```
-
-The pipeline progressively stores:
-
-```text
-state["search_results"]
-state["scraped_content"]
-state["report"]
-state["feedback"]
-```
-
-This makes the flow between agents simple and easy to debug.
-
----
-
-### 6. Streamlit Frontend 🚀
-
-The frontend provides an interactive research dashboard.
-
-The UI includes:
-
-* Futuristic AI visualization
-* Agent pipeline display
-* Research command interface
-* Live execution status
-* Research report
-* AI critique
-* Search results
-* Scraped source content
-
-The architecture therefore has both a backend intelligence layer and a user-facing presentation layer.
-
----
-
-# 🔄 Complete Workflow
-
-When a user enters a topic, the system executes the following sequence:
-
-```text
-┌───────────────────────────────────────┐
-│           User Research Topic         │
-└────────────────────┬──────────────────┘
-                     ↓
-┌───────────────────────────────────────┐
-│             SEARCH AGENT              │
-│          Tavily Web Search            │
-└────────────────────┬──────────────────┘
-                     ↓
-┌───────────────────────────────────────┐
-│             READER AGENT              │
-│      Requests + BeautifulSoup         │
-└────────────────────┬──────────────────┘
-                     ↓
-┌───────────────────────────────────────┐
-│             WRITER CHAIN              │
-│        LangChain + Groq LLM           │
-└────────────────────┬──────────────────┘
-                     ↓
-┌───────────────────────────────────────┐
-│             CRITIC CHAIN              │
-│        AI Quality Evaluation          │
-└────────────────────┬──────────────────┘
-                     ↓
-┌───────────────────────────────────────┐
-│          STREAMLIT DASHBOARD           │
-│ Report + Critique + Sources           │
-└───────────────────────────────────────┘
-```
-
----
-
-# 🛠️ Technology Stack
-
-## Programming Language
-
-**Python**
-
-Used for:
-
-* Agent implementation
-* API integration
-* Web scraping
-* Pipeline orchestration
-* LLM interaction
-
----
-
-## AI / LLM
-
-### LangChain
-
-Used for:
-
-* Building agents
-* Tool calling
-* Prompt templates
-* LCEL chains
-* Connecting the application components
-
-Important concepts learned:
-
-```text
-Agents
-Tools
-ChatPromptTemplate
-LCEL
-Output Parsers
-Agent Invocation
-State Passing
-```
-
-### Groq
-
-Used as the LLM provider for fast model inference through:
-
-```python
-ChatGroq
-```
-
----
-
-## Web Search
-
-### Tavily
-
-Used by the Search Agent to retrieve live web information.
-
-```text
-Research Topic
-     ↓
-Tavily API
-     ↓
-Search Results
-```
-
----
-
-## Web Scraping
-
-### Requests
-
-Used to retrieve webpage content.
-
-### BeautifulSoup
-
-Used to extract and clean readable text from webpages.
-
----
-
-## Frontend
-
-### Streamlit
-
-Used to create the interactive research dashboard without building a separate React frontend.
-
-The interface includes custom HTML and CSS for the futuristic AI-themed design.
-
----
-
-## Environment Management
-
-### python-dotenv
-
-Used to load API keys securely from `.env`.
-
-Example:
-
-```env
-GROQ_API_KEY=your_key_here
-TAVILY_API_KEY=your_key_here
-```
-
-API credentials are excluded from Git using `.gitignore`.
-
----
-
-# 📚 What I Learned
-
-This project was built to move beyond basic LLM API calls and understand how an actual AI application can be structured.
-
-### 1. Building AI Agents
-
-I learned how to create tool-using agents with LangChain.
-
-Instead of:
-
-```text
-User → LLM → Answer
-```
-
-I implemented:
-
-```text
-User
- ↓
-Agent
- ↓
-Tool
- ↓
-External Information
- ↓
-LLM
-```
-
----
-
-### 2. Tool Calling
-
-The Search Agent and Reader Agent use specialized tools.
-
-Examples:
-
-```python
-@tool
-def web_search(query: str):
-    ...
-```
-
-and:
-
-```python
-@tool
-def scrape_url(url: str):
-    ...
-```
-
-This taught me how LLMs can interact with external systems instead of only generating text.
-
----
-
-### 3. LCEL
-
-I learned how to compose LangChain operations using the pipe operator:
-
-```python
-writer_chain = writer_prompt | llm | StrOutputParser()
-```
-
-This helped me understand **LangChain Expression Language (LCEL)** and composable AI workflows.
-
----
-
-### 4. Multi-Agent Architecture
-
-I learned that complex AI tasks can be divided into specialized responsibilities.
-
-Instead of one large prompt doing everything:
-
-```text
-Search + Read + Write + Evaluate
-```
-
-I created separate stages:
-
-```text
-Search Agent
-      ↓
-Reader Agent
-      ↓
-Writer Chain
-      ↓
-Critic Chain
-```
-
-This makes the application easier to understand, debug, and extend.
-
----
-
-### 5. State-Based Pipeline Design
-
-I learned how to pass information between different processing stages using shared state.
-
-```python
 state = {}
 
 state["search_results"] = ...
 state["scraped_content"] = ...
 state["report"] = ...
 state["feedback"] = ...
-```
+
+This design makes the pipeline easier to:
+
+Debug
+Test
+Extend
+Maintain
+Monitor
+6. 🌦️ Weather Workflow
+
+Weather-related queries follow a dedicated live-data workflow.
+
+User Weather Query
+       ↓
+Location Detection
+       ↓
+OpenWeather API
+       ↓
+Live Weather Data
+       ↓
+Groq LLM Formatting
+       ↓
+Streamlit Response
+
+Example:
+
+Weather in Delhi
+
+The application retrieves live weather information instead of depending only on the LLM's internal knowledge.
+
+7. 🎙️ Speech-to-Text
+
+The Streamlit application supports microphone input using Groq Whisper.
+
+The interaction is:
+
+🎙️ User Speaks
+      ↓
+Groq Whisper
+      ↓
+Text Appears in Query Box
+      ↓
+User Reviews / Edits
+      ↓
+Start Research
+
+The feature is designed specifically for speech-to-text input.
+
+The application does not use AI text-to-speech to read the final research response aloud.
+
+8. 🚀 Streamlit Frontend
+
+The application provides an interactive research dashboard built with Streamlit.
+
+The interface allows users to:
+
+Enter a research query
+Select English or Hindi
+Use microphone input
+Start the research pipeline
+View pipeline execution
+Read the final report
+View AI critique
+Inspect search results
+Inspect scraped source content
+View live weather information
+
+The frontend uses Streamlit components for the user interface and keeps the visible application interface clean and readable.
+
+🔄 Complete Research Workflow
+
+A normal research request follows this sequence:
+
+┌───────────────────────────────────────┐
+│           👤 User Query               │
+└────────────────────┬──────────────────┘
+                     ↓
+┌───────────────────────────────────────┐
+│          🔎 Tavily Web Search          │
+└────────────────────┬──────────────────┘
+                     ↓
+┌───────────────────────────────────────┐
+│          🔗 Extract URLs               │
+└────────────────────┬──────────────────┘
+                     ↓
+┌───────────────────────────────────────┐
+│       📖 Scrape Web Sources            │
+│       Requests + BeautifulSoup         │
+└────────────────────┬──────────────────┘
+                     ↓
+┌───────────────────────────────────────┐
+│            📝 Writer Chain             │
+│              Groq + LCEL               │
+└────────────────────┬──────────────────┘
+                     ↓
+┌───────────────────────────────────────┐
+│            🧠 Critic Chain             │
+│          AI Quality Evaluation         │
+└────────────────────┬──────────────────┘
+                     ↓
+┌───────────────────────────────────────┐
+│        📄 Final Research Report        │
+└───────────────────────────────────────┘
+🛠️ Technology Stack
+🐍 Python
+
+Python is used for:
+
+AI pipeline development
+API integration
+Web scraping
+Data processing
+Workflow orchestration
+Streamlit application development
+🤖 LangChain
+
+LangChain is used for:
+
+Prompt templates
+Tool integration
+AI workflows
+LCEL chains
+Output parsing
+LLM orchestration
+
+Important concepts learned:
+
+Agents
+Tools
+Prompt Templates
+LCEL
+Output Parsers
+State Passing
+Workflow Orchestration
+⚡ Groq
+
+Groq is used as the LLM provider for fast inference.
+
+It is used for:
+
+Research report generation
+AI critique
+Query processing
+Speech-to-text through Whisper
+🌐 Tavily
+
+Tavily provides live web search capabilities.
+
+Research Query
+      ↓
+Tavily API
+      ↓
+Search Results
+      ↓
+Relevant Sources
+
+This allows the application to retrieve current web information instead of relying only on static model knowledge.
+
+🌦️ OpenWeather
+
+OpenWeather provides live weather information.
+
+Location
+    ↓
+OpenWeather API
+    ↓
+Current Weather Data
+🕸️ Requests + BeautifulSoup
+Requests
+
+Used to retrieve webpage content.
+
+BeautifulSoup
+
+Used to parse webpage HTML and extract readable text.
+
+🎨 Streamlit
+
+Streamlit is used to build the interactive frontend and research dashboard.
+
+The application includes:
+
+Query input
+Language selection
+Speech-to-text
+Pipeline visualization
+Research report
+AI critique
+Search results
+Scraped source content
+Weather responses
+🔐 Environment Management
+
+The application uses environment variables for API keys during local development.
+
+Required variables:
+
+GROQ_API_KEY=your_groq_api_key
+TAVILY_API_KEY=your_tavily_api_key
+OPENWEATHER_API_KEY=your_openweather_api_key
+
+Never commit real API keys to GitHub.
+
+For Streamlit Cloud deployment, these values should be added through Streamlit Secrets.
+
+📚 What I Learned
+
+This project helped me move beyond basic LLM API calls and understand how to build a complete AI application.
+
+1. 🤖 Building AI Agents
+
+Instead of:
+
+User → LLM → Answer
+
+the project uses a more structured process:
+
+User
+ ↓
+AI Workflow
+ ↓
+External Tools
+ ↓
+Live Information
+ ↓
+LLM
+ ↓
+Structured Output
+2. 🔧 Tool Calling
+
+The project uses tools for external operations.
+
+For example:
+
+@tool
+def web_search(query: str):
+    ...
+
+and:
+
+@tool
+def scrape_url(url: str):
+    ...
+
+This taught me how AI systems can interact with external services and data sources.
+
+3. 🔗 LCEL
+
+I learned how LangChain operations can be composed using the pipe operator:
+
+writer_chain = writer_prompt | llm | StrOutputParser()
+
+This introduced me to LangChain Expression Language (LCEL) and composable AI workflows.
+
+4. 🧩 Multi-Agent Architecture
+
+Complex AI tasks can be broken into specialized stages:
+
+Search
+  ↓
+Read
+  ↓
+Write
+  ↓
+Critique
+
+This makes the application easier to:
+
+Understand
+Debug
+Test
+Extend
+5. 📦 State-Based Pipeline Design
+
+The application passes information between stages using shared state:
+
+state = {}
+
+state["search_results"] = ...
+state["scraped_content"] = ...
+state["report"] = ...
+state["feedback"] = ...
 
 This gave me practical experience with workflow orchestration.
 
----
+6. 🌐 Web Scraping + AI
 
-### 6. Web Scraping + AI
+The project combines traditional software engineering with AI:
 
-The project combines traditional software engineering with AI.
-
-```text
 HTTP Requests
       +
 HTML Parsing
       +
+External APIs
+      +
 LLM Processing
       =
 AI Research Pipeline
-```
 
 This helped me understand how AI applications can consume real-world external data.
 
----
+7. 🧠 AI Evaluation
 
-### 7. AI Evaluation
+Generating an answer and evaluating an answer are two separate problems.
 
-I learned that generating an answer and evaluating an answer are two separate problems.
+The Critic Chain follows:
 
-That led to the Critic Chain:
-
-```text
 Generate Report
       ↓
 Evaluate Report
       ↓
-Find Weaknesses
+Identify Weaknesses
       ↓
-Improve Quality
-```
+Improve Reliability
 
 This is an important pattern for building more reliable LLM applications.
 
----
+8. 🎙️ AI Speech Input
 
-### 8. Building an AI Product UI
+The project also demonstrates how AI speech models can be integrated into an application.
 
-I also learned how to turn an AI backend into a usable application.
+Voice
+  ↓
+Whisper
+  ↓
+Text
+  ↓
+Research Pipeline
 
-The Streamlit interface connects the backend pipeline to a visual research dashboard.
+This creates a more natural way for users to interact with the research system.
 
----
+9. 🚀 Production Deployment
 
-# 🎯 Problem Solved
+The project is not only a local prototype.
+
+It has been deployed using Streamlit Community Cloud and is available through a public URL.
+
+This provided practical experience with:
+
+Environment configuration
+Secrets management
+Deployment
+API configuration
+Production debugging
+Rate-limit handling
+🎯 Problem Solved
 
 Traditional AI chat applications often follow:
 
-```text
 User Question
       ↓
 LLM
       ↓
 Generated Answer
-```
 
-This approach can make it difficult to:
+This can make it difficult to:
 
-* Gather current information
-* Inspect original sources
-* Separate research from writing
-* Evaluate the generated result
-* Understand how the final answer was produced
+Gather current information
+Inspect original sources
+Separate research from writing
+Evaluate generated results
+Understand how the final answer was produced
 
-This project addresses those problems by creating a dedicated research workflow.
+This project addresses those problems with a dedicated research workflow.
 
-### The solution
-
-```text
+✅ The Solution
 Live Web Search
       ↓
 Source Extraction
       ↓
+Webpage Reading
+      ↓
 AI Report Generation
       ↓
 AI Quality Evaluation
-```
 
-The system provides the user with not only a final report, but also the underlying search results, extracted source content, and an independent critique.
+The user receives not only a final research report, but also:
 
----
+Search results
+Source URLs
+Scraped source content
+AI-generated critique
 
-# 💡 Why This Project Matters
+This makes the research process more transparent.
 
-This project demonstrates practical experience with **agentic AI application development**.
+💡 Why This Project Matters
 
-It goes beyond simply calling an LLM API and demonstrates how to build a system where multiple AI components work together with external tools.
+This project demonstrates practical experience with Agentic AI application development.
 
-The project combines:
+It goes beyond simply calling an LLM API and combines:
 
-```text
 LLMs
 +
-Agents
+LangChain
 +
-Tool Calling
+Tools
 +
-Web Search
+Live Web Search
 +
 Web Scraping
++
+External APIs
 +
 Prompt Engineering
 +
 LCEL
 +
-Pipeline Orchestration
+Workflow Orchestration
 +
 AI Evaluation
 +
-Frontend Development
-```
+Speech-to-Text
++
+Streamlit
++
+Cloud Deployment
 
----
+The project demonstrates both:
 
-# 📁 Project Structure
+Software Engineering
 
-```text
+and
+
+AI Engineering
+📁 Project Structure
 MULTI AGENT AI SYSTEM/
 │
 ├── agents.py
-│   └── Search Agent, Reader Agent, Writer Chain, Critic Chain
+│   └── LLM setup, writer chain, critic chain and agent utilities
 │
 ├── tools.py
-│   └── Tavily search tool and webpage scraping tool
+│   └── Tavily search, webpage scraping, weather helpers and secrets
 │
 ├── pipeline.py
-│   └── Main multi-agent workflow orchestration
+│   └── Main research and weather workflow orchestration
 │
 ├── app.py
 │   └── Streamlit frontend
@@ -612,141 +610,140 @@ MULTI AGENT AI SYSTEM/
 │   └── Python dependencies
 │
 ├── .env
-│   └── API credentials (not committed)
+│   └── Local API credentials (not committed)
 │
 ├── .gitignore
 │   └── Ignored files and secrets
 │
 └── README.md
     └── Project documentation
-```
-
----
-
-# ⚙️ Installation
-
-Clone the repository:
-
-```bash
+⚙️ Installation
+1. Clone the repository
 git clone https://github.com/PriyanshuYadav000/multi-agent-ai-system.git
 cd multi-agent-ai-system
-```
+2. Create a virtual environment
 
-Create a virtual environment:
+Using uv:
 
-```bash
 uv venv
-```
-
-Activate it:
-
-### macOS / Linux
-
-```bash
+3. Activate the environment
+macOS / Linux
 source .venv/bin/activate
-```
-
-Install dependencies:
-
-```bash
+Windows
+.venv\Scripts\activate
+4. Install dependencies
 uv pip install -r requirements.txt
-```
+🔐 Environment Variables
 
----
+Create a .env file:
 
-# 🔐 Environment Variables
-
-Create a `.env` file:
-
-```env
 GROQ_API_KEY=your_groq_api_key
 TAVILY_API_KEY=your_tavily_api_key
-```
+OPENWEATHER_API_KEY=your_openweather_api_key
 
-Never commit your `.env` file.
+Never commit your .env file.
 
----
+Make sure .env is included in .gitignore.
 
-# ▶️ Run the Application
+▶️ Run the Application
 
-### Run the research pipeline from terminal
+Start the Streamlit application:
 
-```bash
-uv run pipeline.py
-```
-
-Enter a research topic when prompted.
-
----
-
-### Run the Streamlit application
-
-```bash
 streamlit run app.py
-```
 
 The application will open in your browser.
 
----
+☁️ Deployment
 
-# 🧪 Example
+The current production version is deployed on Streamlit Community Cloud.
 
-Example research topic:
+🌐 Live Application
 
-```text
+🚀 https://multi-agent-ai-system-rnq6zeu2j2jdx2apsr8vvv.streamlit.app/
+
+Streamlit Secrets
+
+Configure the following secrets in Streamlit Community Cloud:
+
+GROQ_API_KEY = "your_groq_api_key"
+TAVILY_API_KEY = "your_tavily_api_key"
+OPENWEATHER_API_KEY = "your_openweather_api_key"
+🧪 Example Queries
+Research Query
 Impact of AI on software engineering in 2026
-```
+Current Information
+Latest developments in artificial intelligence
+Hindi Research
+भारत में आर्टिफिशियल इंटेलिजेंस का भविष्य
+Weather
+Weather in Delhi
+Voice Input
+🎙️ Speak your research question
 
-The system performs:
+The speech is converted into text and placed inside the research query field before execution.
 
-```text
-🔎 Search Agent
-      ↓
-📖 Reader Agent
-      ↓
-✍️ Writer Chain
-      ↓
-🧠 Critic Chain
-```
+📊 Expected Output
 
-and produces:
+For a research query, the application provides:
 
-```text
 📄 Research Report
+        +
 🧠 AI Critique
+        +
 🔎 Search Results
+        +
 📖 Scraped Sources
-```
 
----
+This makes the research workflow more transparent than returning only a final LLM response.
 
-# 🚀 Future Improvements
+🛡️ Reliability & Error Handling
 
-The current system is intentionally designed as a foundation for a larger agentic research platform.
+During development, the application encountered issues such as:
+
+LLM rate limits
+Large prompts
+Too many output tokens
+Irrelevant search results
+Unavailable webpages
+Missing environment variables
+Streamlit widget state conflicts
+
+The system was improved with:
+
+Smaller LLM contexts
+Output token limits
+Retry and backoff logic
+Direct Tavily retrieval
+Real URL extraction
+Source validation
+Environment fallback handling
+Safer Streamlit state management
+
+These improvements made the application more suitable for real-world usage.
+
+🚀 Future Improvements
 
 Potential future improvements include:
 
-* Parallel research agents
-* Multiple source extraction
-* Source credibility scoring
-* Citation verification
-* Research memory
-* Better structured outputs
-* Human-in-the-loop review
-* Persistent research history
-* Database integration
-* Authentication
-* Advanced observability
-* Improved error handling
-* Deployment with scalable infrastructure
+Parallel research agents
+Multiple-source extraction
+Source credibility scoring
+Citation verification
+Research memory
+Persistent research history
+Database integration
+Authentication
+Human-in-the-loop review
+Structured JSON outputs
+Advanced observability
+Better source validation
+Improved evaluation pipelines
+Scalable infrastructure
+Research history and user accounts
+📈 Project Learning Journey
 
----
+This project represents a progression from basic LLM applications toward a complete AI application:
 
-# 📈 Project Learning Journey
-
-This project represents a progression from basic LLM applications toward more structured AI systems:
-
-```text
 LLM API
    ↓
 Prompt Engineering
@@ -757,24 +754,24 @@ Tools
    ↓
 Agents
    ↓
-Multi-Agent Workflow
+Multi-Stage Workflow
    ↓
 External Data
    ↓
+Web Scraping
+   ↓
 AI Evaluation
    ↓
-Full AI Application
-```
-
----
-
-# 👨‍💻 Author
-
-**Priyanshu Yadav**
+Speech-to-Text
+   ↓
+Streamlit Application
+   ↓
+Production Deployment
+👨‍💻 Author
+Priyanshu Yadav
 
 Aspiring Software Engineer focused on:
 
-```text
 Python
 JavaScript
 SQL
@@ -782,16 +779,35 @@ MERN
 Generative AI
 LangChain
 Agentic AI
-```
+⭐ Project Goal
 
----
+The goal of this project is to understand how modern AI systems can move from simple:
 
-# ⭐ Project Goal
+Question → Answer
 
-The goal of this project is to understand how modern AI systems can move from simple **question → answer** interactions toward collaborative, tool-using, evaluative workflows.
+interactions toward collaborative, tool-using, evaluative workflows.
 
-```text
+The core idea is:
+
 SEARCH → READ → WRITE → CRITIQUE
-```
 
-**Built to learn. Built to experiment. Built to understand Agentic AI.**
+combined with:
+
+Live Data
++
+External Tools
++
+LLMs
++
+AI Evaluation
++
+User Interface
+
+Built to learn. Built to experiment. Built to understand Agentic AI.
+
+🌐 Try It Live
+
+🚀 Multi-Agent AI Research System:
+https://multi-agent-ai-system-rnq6zeu2j2jdx2apsr8vvv.streamlit.app/
+
+⭐ If you find this project useful, consider giving the repository a star!
