@@ -6,3 +6,5 @@ requests
 streamlit
 python-dotenv
 rich
+groq
+streamlit-mic-recorder

@@ -1,74 +1,309 @@
-from agents import build_reader_agent , build_search_agent , writer_chain , critic_chain
+from agents import (
+    build_reader_agent,
+    build_search_agent,
+    writer_chain,
+    critic_chain,
+)
 
-def run_research_pipeline(topic : str) -> dict:
+from tools import (
+    get_live_weather,
+    is_weather_query,
+    extract_weather_location,
+)
+
+
+# ============================================================
+# MAIN PIPELINE
+# ============================================================
+
+def run_research_pipeline(
+    topic: str,
+    language: str = "English",
+    progress_callback=None,
+) -> dict:
+
+    topic = topic.strip()
 
     state = {}
 
-    #search agent working 
-    print("\n"+" ="*50)
-    print("step 1 - search agent is working ...")
-    print("="*50)
+    def progress(
+        stage: str,
+        status: str,
+    ):
 
-    search_agent = build_search_agent()
-    search_result = search_agent.invoke({
-        "messages" : [("user", f"Find recent, reliable and detailed information about: {topic}")]
-    })
-    state["search_results"] = search_result['messages'][-1].content
+        if progress_callback:
+            progress_callback(
+                stage,
+                status,
+            )
 
-    print("\n search result ",state['search_results'])
+    # ========================================================
+    # WEATHER MODE
+    # ========================================================
 
-    #step 2 - reader agent 
-    print("\n"+" ="*50)
-    print("step 2 - Reader agent is scraping top resources ...")
-    print("="*50)
+    if is_weather_query(topic):
 
-    reader_agent = build_reader_agent()
-    reader_result = reader_agent.invoke({
-        "messages": [("user",
-            f"Based on the following search results about '{topic}', "
-            f"pick the most relevant URL and scrape it for deeper content.\n\n"
-            f"Search Results:\n{state['search_results'][:800]}"
-        )]
-    })
+        progress(
+            "weather",
+            "active",
+        )
 
-    state['scraped_content'] = reader_result['messages'][-1].content
+        location = extract_weather_location(
+            topic
+        )
 
-    print("\nscraped content: \n", state['scraped_content'])
+        weather_data = get_live_weather(
+            location
+        )
 
-    #step 3 - writer chain 
+        # Ask Groq to present weather
+        # in the selected language.
+        from agents import llm
 
-    print("\n"+" ="*50)
-    print("step 3 - Writer is drafting the report ...")
-    print("="*50)
+        weather_prompt = f"""
+You are a weather assistant.
 
-    research_combined = (
-        f"SEARCH RESULTS : \n {state['search_results']} \n\n"
-        f"DETAILED SCRAPED CONTENT : \n {state['scraped_content']}"
+Return the following live weather
+information in {language}.
+
+Be concise and easy to understand.
+
+Weather data:
+{weather_data}
+"""
+
+        response = llm.invoke(
+            weather_prompt
+        )
+
+        answer = response.content
+
+        state["mode"] = "weather"
+        state["topic"] = topic
+        state["language"] = language
+        state["weather"] = answer
+        state["report"] = answer
+        state["feedback"] = ""
+        state["search_results"] = ""
+        state["scraped_content"] = ""
+
+        progress(
+            "weather",
+            "complete",
+        )
+
+        return state
+
+    # ========================================================
+    # STEP 1 - SEARCH
+    # ========================================================
+
+    progress(
+        "search",
+        "active",
     )
 
-    state["report"] = writer_chain.invoke({
-        "topic" : topic,
-        "research" : research_combined
-    })
+    print(
+        "\n" + "=" * 50
+    )
 
-    print("\n Final Report\n",state['report'])
+    print(
+        "STEP 1 - SEARCH AGENT"
+    )
 
-    #critic report 
+    print(
+        "=" * 50
+    )
 
-    print("\n"+" ="*50)
-    print("step 4 - critic is reviewing the report ")
-    print("="*50)
+    search_agent = build_search_agent()
 
-    state["feedback"] = critic_chain.invoke({
-        "report":state['report']
-    })
+    search_result = search_agent.invoke(
+        {
+            "messages": [
+                (
+                    "user",
+                    (
+                        "Find recent, reliable and "
+                        f"detailed information about: {topic}"
+                    ),
+                )
+            ]
+        }
+    )
 
-    print("\n critic report \n", state['feedback'])
+    state["search_results"] = (
+        search_result["messages"][-1].content
+    )
+
+    progress(
+        "search",
+        "complete",
+    )
+
+    # ========================================================
+    # STEP 2 - READER
+    # ========================================================
+
+    progress(
+        "reader",
+        "active",
+    )
+
+    print(
+        "\n" + "=" * 50
+    )
+
+    print(
+        "STEP 2 - READER AGENT"
+    )
+
+    print(
+        "=" * 50
+    )
+
+    reader_agent = build_reader_agent()
+
+    reader_result = reader_agent.invoke(
+        {
+            "messages": [
+                (
+                    "user",
+                    (
+                        f"Based on the following search "
+                        f"results about '{topic}', "
+                        "pick the most relevant URL "
+                        "and scrape it for deeper content.\n\n"
+                        "Search Results:\n"
+                        f"{state['search_results'][:1500]}"
+                    ),
+                )
+            ]
+        }
+    )
+
+    state["scraped_content"] = (
+        reader_result["messages"][-1].content
+    )
+
+    progress(
+        "reader",
+        "complete",
+    )
+
+    # ========================================================
+    # STEP 3 - WRITER
+    # ========================================================
+
+    progress(
+        "writer",
+        "active",
+    )
+
+    print(
+        "\n" + "=" * 50
+    )
+
+    print(
+        "STEP 3 - WRITER CHAIN"
+    )
+
+    print(
+        "=" * 50
+    )
+
+    combined_research = (
+        "SEARCH RESULTS:\n"
+        f"{state['search_results']}\n\n"
+        "DETAILED SCRAPED CONTENT:\n"
+        f"{state['scraped_content']}"
+    )
+
+    state["report"] = writer_chain.invoke(
+        {
+            "topic": topic,
+            "language": language,
+            "research": combined_research,
+        }
+    )
+
+    progress(
+        "writer",
+        "complete",
+    )
+
+    # ========================================================
+    # STEP 4 - CRITIC
+    # ========================================================
+
+    progress(
+        "critic",
+        "active",
+    )
+
+    print(
+        "\n" + "=" * 50
+    )
+
+    print(
+        "STEP 4 - CRITIC CHAIN"
+    )
+
+    print(
+        "=" * 50
+    )
+
+    state["feedback"] = critic_chain.invoke(
+        {
+            "report": state["report"],
+            "language": language,
+        }
+    )
+
+    progress(
+        "critic",
+        "complete",
+    )
+
+    # ========================================================
+    # FINAL STATE
+    # ========================================================
+
+    state["mode"] = "research"
+    state["topic"] = topic
+    state["language"] = language
 
     return state
 
 
+# ============================================================
+# TERMINAL TEST
+# ============================================================
 
 if __name__ == "__main__":
-    topic = input("\n Enter a research topic : ")
-    run_research_pipeline(topic)
+
+    topic = input(
+        "\nEnter a research topic: "
+    )
+
+    language = input(
+        "Language (English/Hindi): "
+    ).strip()
+
+    if language not in [
+        "English",
+        "Hindi",
+    ]:
+        language = "English"
+
+    result = run_research_pipeline(
+        topic,
+        language,
+    )
+
+    print(
+        "\n\nFINAL REPORT\n"
+    )
+
+    print(
+        result["report"]
+    )

@@ -1,70 +1,187 @@
+from dotenv import load_dotenv
+
 from langchain.agents import create_agent
 from langchain_groq import ChatGroq
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
 
-from tools import web_search, scrape_url
-from dotenv import load_dotenv
+from tools import (
+    web_search,
+    scrape_url,
+    live_weather,
+)
+
 
 load_dotenv()
 
 
-from langchain_groq import ChatGroq
+# ============================================================
+# LLM
+# ============================================================
 
 llm = ChatGroq(
     model="openai/gpt-oss-20b",
-    temperature=0
+    temperature=0,
 )
 
 
-#1st agent 
+# ============================================================
+# SEARCH AGENT
+# ============================================================
+
 def build_search_agent():
+
     return create_agent(
-        model = llm,
-        tools= [web_search]
+        model=llm,
+        tools=[web_search],
     )
 
-#2nd agent 
+
+# ============================================================
+# READER AGENT
+# ============================================================
 
 def build_reader_agent():
+
     return create_agent(
-        model = llm,
-        tools = [scrape_url]
+        model=llm,
+        tools=[scrape_url],
     )
 
 
-#writer chain 
+# ============================================================
+# WEATHER AGENT
+# ============================================================
 
-writer_prompt = ChatPromptTemplate.from_messages([
-    ("system", "You are an expert research writer. Write clear, structured and insightful reports."),
-    ("human", """Write a detailed research report on the topic below.
+def build_weather_agent():
 
-Topic: {topic}
+    return create_agent(
+        model=llm,
+        tools=[live_weather],
+    )
+
+
+# ============================================================
+# WRITER CHAIN
+# ============================================================
+
+writer_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+You are an expert research writer.
+
+Create factual, structured and professional
+research reports.
+
+LANGUAGE RULE:
+
+The selected language will be either:
+
+English
+or
+Hindi
+
+If the selected language is English:
+write the complete report in English.
+
+If the selected language is Hindi:
+write the complete report in natural Hindi.
+
+Do not unnecessarily mix Hindi and English.
+
+Keep:
+- proper nouns
+- URLs
+- company names
+- technical names
+
+in their original form when appropriate.
+
+Never invent facts or sources.
+Use only the supplied research.
+""",
+        ),
+        (
+            "human",
+            """
+Create a detailed research report.
+
+Topic:
+{topic}
+
+Selected Language:
+{language}
 
 Research Gathered:
 {research}
 
-Structure the report as:
-- Introduction
-- Key Findings (minimum 3 well-explained points)
-- Conclusion
-- Sources (list all URLs found in the research)
+Use this structure:
 
-Be detailed, factual and professional."""),
-])
+# Introduction
 
-writer_chain = writer_prompt | llm | StrOutputParser()
+# Key Findings
 
-#critic_chain 
+Provide at least 3 well-explained findings.
 
-critic_prompt = ChatPromptTemplate.from_messages([
-     ("system", "You are a sharp and constructive research critic. Be honest and specific."),
-    ("human", """Review the research report below and evaluate it strictly.
+# Conclusion
+
+# Sources
+
+List the source URLs found in the research.
+
+The report must be written in
+the selected language.
+""",
+        ),
+    ]
+)
+
+writer_chain = (
+    writer_prompt
+    | llm
+    | StrOutputParser()
+)
+
+
+# ============================================================
+# CRITIC CHAIN
+# ============================================================
+
+critic_prompt = ChatPromptTemplate.from_messages(
+    [
+        (
+            "system",
+            """
+You are a strict and constructive
+research quality evaluator.
+
+Evaluate the report for:
+
+- factual quality
+- clarity
+- completeness
+- structure
+- source quality
+- unsupported claims
+
+Write the evaluation in the
+selected language.
+""",
+        ),
+        (
+            "human",
+            """
+Review this research report.
+
+Selected Language:
+{language}
 
 Report:
 {report}
 
-Respond in this exact format:
+Return exactly:
 
 Score: X/10
 
@@ -77,7 +194,14 @@ Areas to Improve:
 - ...
 
 One line verdict:
-..."""),
-])
+...
+""",
+        ),
+    ]
+)
 
-critic_chain = critic_prompt | llm | StrOutputParser()
+critic_chain = (
+    critic_prompt
+    | llm
+    | StrOutputParser()
+)
